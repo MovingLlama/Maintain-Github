@@ -50,8 +50,14 @@ An AI-powered GitHub repository management platform. Select your GitHub reposito
 The easiest way to get started is the interactive setup script. It asks you step by step what you need and generates both `.env` and `docker-compose.generated.yml` for you:
 
 ```bash
-chmod +x setup.sh
-./setup.sh
+# Clone and run setup in one command:
+git clone https://github.com/MovingLlama/Maintain-Github.git && cd Maintain-Github && chmod +x setup.sh && ./setup.sh
+```
+
+Or download just the setup script to an existing clone:
+
+```bash
+wget -O setup.sh https://raw.githubusercontent.com/MovingLlama/Maintain-Github/main/setup.sh && chmod +x setup.sh && ./setup.sh
 ```
 
 The script will guide you through:
