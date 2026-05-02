@@ -1,0 +1,167 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: maintain_traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/traefik.yml:ro
+      - ./traefik/dynamic:/dynamic:ro
+      - maintain_traefik_certs:/certs
+    networks:
+      - maintain_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: maintain_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-maintain_github}
+      POSTGRES_USER: ${POSTGRES_USER:-maintain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - maintain_postgres_data:/var/lib/postgresql/data
+    networks:
+      - maintain_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-maintain} -d ${POSTGRES_DB:-maintain_github}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: maintain_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - maintain_redis_data:/data
+    networks:
+      - maintain_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: maintain_ollama
+    restart: unless-stopped
+    volumes:
+      - maintain_ollama_data:/root/.ollama
+    networks:
+      - maintain_net
+    # Uncomment for NVIDIA GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: maintain_backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://ollama:11434
+      REPOS_STORAGE_PATH: /app/repos
+    volumes:
+      - maintain_repos:/app/repos
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - maintain_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`${DOMAIN}`) && (PathPrefix(`/api`) || PathPrefix(`/ws`) || PathPrefix(`/auth`))"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls=true"
+      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      - "traefik.http.middlewares.backend-ratelimit.ratelimit.average=100"
+      - "traefik.http.middlewares.backend-ratelimit.ratelimit.burst=50"
+      - "traefik.http.routers.backend.middlewares=backend-ratelimit"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: maintain_worker
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_BASE_URL: http://ollama:11434
+      REPOS_STORAGE_PATH: /app/repos
+    volumes:
+      - maintain_repos:/app/repos
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - maintain_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: maintain_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - maintain_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      # HTTP → HTTPS Redirect
+      - "traefik.http.routers.frontend-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.frontend-http.entrypoints=web"
+      - "traefik.http.routers.frontend-http.middlewares=redirect-https"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.permanent=true"
+
+networks:
+  maintain_net:
+    driver: bridge
+
+volumes:
+  maintain_postgres_data:
+  maintain_redis_data:
+  maintain_ollama_data:
+  maintain_traefik_certs:
+  maintain_repos:

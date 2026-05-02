@@ -1,0 +1,51 @@
+# Secrets
+.env
+*.pem
+*.key
+*.crt
+
+# Traefik certs
+traefik/certs/
+
+# Cloned repos (not committed)
+repos/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.cache/
+*.log
+npm-debug.log*
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Alembic
+backend/alembic.ini.local

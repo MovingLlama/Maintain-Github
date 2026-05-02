@@ -1,0 +1,111 @@
+# docker-compose.minimal.yml
+# 
+# Minimal setup: only Backend, Frontend, Worker and Redis.
+# Requires external PostgreSQL and Ollama instances.
+# Use this when you already have a database and/or Ollama running,
+# or when you prefer Cloudflare Tunnel instead of Traefik for HTTPS.
+#
+# Usage:
+#   docker compose -f docker-compose.minimal.yml up -d
+#
+# For Cloudflare Tunnel (cloudflared), run the tunnel pointing to:
+#   http://localhost:8000  → for your API domain  (e.g. api.yourdomain.com)
+#   http://localhost:3000  → for your app domain  (e.g. yourdomain.com)
+# Or use a single tunnel pointing to the frontend (which proxies /api to backend).
+#
+# Environment variables (set in .env):
+#   POSTGRES_HOST     - Your external PostgreSQL host (default: host.docker.internal)
+#   POSTGRES_PORT     - PostgreSQL port (default: 5432)
+#   POSTGRES_DB       - Database name
+#   POSTGRES_USER     - Database user
+#   POSTGRES_PASSWORD - Database password
+#   OLLAMA_BASE_URL   - Your Ollama instance URL (default: http://host.docker.internal:11434)
+#   REDIS_URL         - Redis URL (default: redis://redis:6379/0 = internal redis)
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: maintain_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - maintain_redis_data:/data
+    networks:
+      - maintain_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: maintain_backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Override REDIS_URL to use internal redis service
+      REDIS_URL: redis://redis:6379/0
+      REPOS_STORAGE_PATH: /app/repos
+      # If POSTGRES_HOST is not set in .env, use host.docker.internal
+      # to reach a PostgreSQL running on the Docker host machine
+      POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - maintain_repos:/app/repos
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - maintain_net
+    extra_hosts:
+      # Allows container to reach the Docker host (for external DB/Ollama)
+      - "host.docker.internal:host-gateway"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: maintain_worker
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      REPOS_STORAGE_PATH: /app/repos
+      POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    volumes:
+      - maintain_repos:/app/repos
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - maintain_net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: maintain_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - maintain_net
+
+networks:
+  maintain_net:
+    driver: bridge
+
+volumes:
+  maintain_redis_data:
+  maintain_repos:
