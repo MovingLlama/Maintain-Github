@@ -63,13 +63,13 @@ You only need `docker` and `curl` — no source code required.
 Run the install script — it downloads all required files (compose files, traefik config, env template):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/stefan-seyerl/maintain-github/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MovingLlama/Maintain-Github/main/install.sh | bash
 ```
 
 Or download and inspect first:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/stefan-seyerl/maintain-github/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/MovingLlama/Maintain-Github/main/install.sh -o install.sh
 chmod +x install.sh
 ./install.sh
 ```
@@ -191,7 +191,7 @@ make help            # Show all available commands
 If you want to modify the source code and build images locally:
 
 ```bash
-git clone https://github.com/stefan-seyerl/maintain-github.git
+git clone https://github.com/MovingLlama/Maintain-Github.git
 cd maintain-github
 cp .env.example .env
 nano .env

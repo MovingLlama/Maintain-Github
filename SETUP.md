@@ -62,7 +62,7 @@ sudo ufw status
 Run the installer — no git clone needed! It downloads all required config files and images from GitHub:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/stefan-seyerl/maintain-github/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MovingLlama/Maintain-Github/main/install.sh | bash
 ```
 
 This creates in the current directory:

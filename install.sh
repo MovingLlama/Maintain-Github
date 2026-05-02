@@ -2,8 +2,8 @@
 set -e
 
 # Configuration
-REPO_OWNER="stefan-seyerl"
-REPO_NAME="maintain-github"
+REPO_OWNER="MovingLlama"
+REPO_NAME="Maintain-Github"
 BASE_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main"
 
 echo "🚀 Starting Maintain@Github Installation..."
