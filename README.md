@@ -42,11 +42,35 @@ An AI-powered GitHub repository management platform. Select your GitHub reposito
 
 ### Prerequisites
 - Docker & Docker Compose v2
-- A server with a public IP address (for HTTPS)
-- A domain name pointing to your server
 - A GitHub account
+- (Optional) A server with a public IP and domain for production use
 
-### 1. Create GitHub OAuth App
+### Option A: Interactive Setup (Recommended)
+
+The easiest way to get started is the interactive setup script. It asks you step by step what you need and generates both `.env` and `docker-compose.generated.yml` for you:
+
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+The script will guide you through:
+- **PostgreSQL**: New local Docker container or connect to an existing instance
+- **Traefik**: Automatic HTTPS with Let's Encrypt (or skip for Cloudflare Tunnel / local dev)
+- **Ollama**: Local Docker container (with optional GPU support) or external instance
+- **OpenRouter**: Optional API key for cloud AI models (GPT-4, Claude, etc.)
+- **GitHub OAuth**: Client ID & Secret (with callback URL hints)
+- **Secrets**: Automatically generates secure keys
+
+After the script finishes:
+
+```bash
+docker compose -f docker-compose.generated.yml up -d --build
+```
+
+### Option B: Manual Setup
+
+#### 1. Create GitHub OAuth App
 
 1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
 2. Click **"New OAuth App"**
@@ -56,7 +80,7 @@ An AI-powered GitHub repository management platform. Select your GitHub reposito
    - **Authorization callback URL:** `https://yourdomain.com/auth/github/callback`
 4. Copy the **Client ID** and generate a **Client Secret**
 
-### 2. Configure Environment
+#### 2. Configure Environment
 
 ```bash
 # Create .env from template
@@ -83,7 +107,7 @@ JWT_SECRET_KEY=your_random_jwt_secret
 POSTGRES_PASSWORD=your_db_password
 ```
 
-### 3. Start the Application
+#### 3. Start the Application
 
 ```bash
 # Open required firewall ports
@@ -99,11 +123,11 @@ make logs
 
 Wait until you see: `Database initialized.` and `Application startup complete.`
 
-### 4. Access the App
+#### 4. Access the App
 
 Navigate to `https://yourdomain.com` and log in with GitHub.
 
-### 5. Pull an AI Model (Optional but Recommended)
+#### 5. Pull an AI Model (Optional but Recommended)
 
 ```bash
 make ollama-pull
@@ -136,8 +160,11 @@ make help            # Show all commands
 
 ```
 Maintain@Github/
-├── docker-compose.yml      # All services
-├── .env.example            # Environment template
+├── setup.sh                # Interactive setup wizard
+├── docker-compose.yml      # Full stack (with Traefik, Postgres, Ollama)
+├── docker-compose.minimal.yml  # Minimal stack (external DB/Ollama)
+├── .env.example            # Environment template (full)
+├── .env.minimal.example    # Environment template (minimal)
 ├── Makefile                # Developer shortcuts
 ├── ARCHITECTURE.md         # Detailed architecture docs
 ├── README.md               # This file
