@@ -57,12 +57,24 @@ sudo ufw enable
 sudo ufw status
 ```
 
-## 6. Configure the Application
+## 6. Install Maintain@Github
+
+Run the installer — no git clone needed! It downloads all required config files and images from GitHub:
 
 ```bash
-# Copy template
-cp .env.example .env
+curl -fsSL https://raw.githubusercontent.com/stefan-seyerl/maintain-github/main/install.sh | bash
+```
 
+This creates in the current directory:
+- `docker-compose.yml` — full production stack
+- `docker-compose.minimal.yml` — minimal stack (external DB/Ollama)
+- `traefik/traefik.yml` — Traefik reverse proxy config
+- `traefik/dynamic/middlewares.yml` — Traefik middleware config
+- `.env` — environment config (copied from `.env.example`)
+
+## 7. Configure the Application
+
+```bash
 # Generate secure values
 APP_SECRET=$(openssl rand -hex 32)
 JWT_SECRET=$(openssl rand -hex 32)
@@ -98,17 +110,14 @@ POSTGRES_PASSWORD=<generated>
 OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-## 7. First Start
+## 8. First Start
 
 ```bash
-# Create required directories
-mkdir -p traefik/certs
-
-# Build images and start
-make up-build
+# Pull images from GHCR and start all services
+docker compose up -d
 
 # Monitor logs (Ctrl+C to stop following)
-make logs
+docker compose logs -f
 ```
 
 Expected startup sequence:
@@ -116,16 +125,16 @@ Expected startup sequence:
 2. PostgreSQL starts and becomes healthy
 3. Redis starts and becomes healthy
 4. Backend starts, waits for DB/Redis, runs migrations
-5. Frontend builds and starts
+5. Frontend starts
 6. Worker starts
 
 **Ready when you see:** `Application startup complete.`
 
-## 8. Add AI Models
+## 9. Add AI Models
 
 ```bash
-# Interactive model pull
-make ollama-pull
+# Pull a model interactively
+docker compose exec ollama ollama pull llama3:8b
 
 # Suggested models:
 # - llama3:8b          (3.5GB, good general purpose)
@@ -133,24 +142,26 @@ make ollama-pull
 # - deepseek-coder:6.7b (3.8GB, excellent for code)
 ```
 
-## 9. Access & Login
+## 10. Access & Login
 
 1. Open `https://your-domain.com` in your browser
 2. Click **"Continue with GitHub"**
 3. Authorize the application
 4. You're logged in! 🎉
 
-## 10. Updating
+## 11. Updating
+
+No git pull needed — images are pulled directly from GHCR:
 
 ```bash
-# Pull latest code changes
-git pull
+# Pull latest images
+docker compose pull
 
-# Rebuild and restart
-make up-build
+# Restart with new images
+docker compose up -d
 
 # Apply any new database migrations
-make db-upgrade
+docker compose exec backend alembic upgrade head
 ```
 
 ## Production Checklist

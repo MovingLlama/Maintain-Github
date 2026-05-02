@@ -4,14 +4,14 @@
         ollama-pull lint test \
         minimal-up minimal-up-build minimal-down \
         minimal-logs minimal-restart minimal-build \
-        minimal-shell-backend minimal-db-upgrade
+        minimal-shell-backend minimal-db-upgrade \
+        dev-up dev-up-build dev-down dev-logs dev-restart dev-build \
+        dev-minimal-up dev-minimal-up-build dev-minimal-down
 
-# --- Docker Compose ---
+# --- Production (GHCR Images) ---
 up:
+	docker compose pull
 	docker compose up -d
-
-up-build:
-	docker compose up -d --build
 
 down:
 	docker compose down
@@ -19,22 +19,30 @@ down:
 logs:
 	docker compose logs -f
 
-logs-backend:
-	docker compose logs -f backend worker
-
-build:
-	docker compose build
-
 restart:
 	docker compose restart
 
-restart-backend:
-	docker compose restart backend worker
+pull:
+	docker compose pull
 
 clean:
 	docker compose down -v --remove-orphans
 
-# --- Database ---
+# --- Minimal Production ---
+minimal-up:
+	docker compose -f docker-compose.minimal.yml pull
+	docker compose -f docker-compose.minimal.yml up -d
+
+minimal-down:
+	docker compose -f docker-compose.minimal.yml down
+
+minimal-logs:
+	docker compose -f docker-compose.minimal.yml logs -f
+
+minimal-restart:
+	docker compose -f docker-compose.minimal.yml restart
+
+# --- Database (Production) ---
 db-migrate:
 	docker compose exec backend alembic revision --autogenerate -m "$(msg)"
 
@@ -47,14 +55,14 @@ db-downgrade:
 db-shell:
 	docker compose exec postgres psql -U $${POSTGRES_USER:-maintain} -d $${POSTGRES_DB:-maintain_github}
 
-# --- Shells ---
+# --- Shells (Production) ---
 shell-backend:
 	docker compose exec backend /bin/bash
 
 shell-frontend:
 	docker compose exec frontend /bin/sh
 
-# --- Ollama ---
+# --- Ollama (Production) ---
 ollama-pull:
 	@read -p "Model name (e.g. llama3:8b): " model; \
 	docker compose exec ollama ollama pull $$model
@@ -62,12 +70,37 @@ ollama-pull:
 ollama-list:
 	docker compose exec ollama ollama list
 
-# --- Development ---
-dev-frontend:
-	cd frontend && npm run dev
+# --- Development (Local Build) ---
+dev-up:
+	docker compose -f docker-compose.dev.yml up -d
 
-dev-backend:
-	cd backend && uvicorn main:app --reload --host 0.0.0.0 --port 8000
+dev-up-build:
+	docker compose -f docker-compose.dev.yml up -d --build
+
+dev-down:
+	docker compose -f docker-compose.dev.yml down
+
+dev-logs:
+	docker compose -f docker-compose.dev.yml logs -f
+
+dev-restart:
+	docker compose -f docker-compose.dev.yml restart
+
+dev-build:
+	docker compose -f docker-compose.dev.yml build
+
+dev-shell-backend:
+	docker compose -f docker-compose.dev.yml exec backend /bin/bash
+
+# --- Dev Minimal ---
+dev-minimal-up:
+	docker compose -f docker-compose.dev-minimal.yml up -d
+
+dev-minimal-up-build:
+	docker compose -f docker-compose.dev-minimal.yml up -d --build
+
+dev-minimal-down:
+	docker compose -f docker-compose.dev-minimal.yml down
 
 # --- Setup ---
 setup:
@@ -77,42 +110,22 @@ setup:
 
 help:
 	@echo "Available commands:"
-	@echo "  make up              - Start all services"
-	@echo "  make up-build        - Build and start all services"
-	@echo "  make down            - Stop all services"
-	@echo "  make logs            - Follow all logs"
-	@echo "  make build           - Build images"
-	@echo "  make restart         - Restart all services"
+	@echo "  make up              - Start production services (GHCR)"
+	@echo "  make pull            - Pull latest GHCR images"
+	@echo "  make down            - Stop production services"
+	@echo "  make logs            - Follow production logs"
 	@echo "  make clean           - Stop and remove all volumes"
 	@echo "  make db-migrate      - Create new migration (msg=description)"
 	@echo "  make db-upgrade      - Apply pending migrations"
-	@echo "  make db-shell        - Open psql shell"
 	@echo "  make shell-backend   - Open backend shell"
 	@echo "  make ollama-pull     - Pull an Ollama model"
-	@echo "  make ollama-list     - List installed Ollama models"
 	@echo "  make setup           - Initial project setup"
-
-# --- Minimal Stack (without PostgreSQL, Ollama, Traefik) ---
-minimal-up:
-	docker compose -f docker-compose.minimal.yml up -d
-
-minimal-up-build:
-	docker compose -f docker-compose.minimal.yml up -d --build
-
-minimal-down:
-	docker compose -f docker-compose.minimal.yml down
-
-minimal-logs:
-	docker compose -f docker-compose.minimal.yml logs -f
-
-minimal-restart:
-	docker compose -f docker-compose.minimal.yml restart
-
-minimal-build:
-	docker compose -f docker-compose.minimal.yml build
-
-minimal-shell-backend:
-	docker compose -f docker-compose.minimal.yml exec backend /bin/bash
-
-minimal-db-upgrade:
-	docker compose -f docker-compose.minimal.yml exec backend alembic upgrade head
+	@echo ""
+	@echo "  make dev-up          - Start dev services (Local Build)"
+	@echo "  make dev-up-build    - Build and start dev services"
+	@echo "  make dev-down        - Stop dev services"
+	@echo "  make dev-logs        - Follow dev logs"
+	@echo "  make dev-build       - Build dev images"
+	@echo ""
+	@echo "  make minimal-up      - Start minimal production stack"
+	@echo "  make dev-minimal-up  - Start minimal dev stack"

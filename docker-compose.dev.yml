@@ -77,7 +77,9 @@ services:
     #           capabilities: [gpu]
 
   backend:
-    image: ghcr.io/stefan-seyerl/maintain-github-backend:${IMAGE_TAG:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: maintain_backend
     restart: unless-stopped
     env_file: .env
@@ -107,7 +109,9 @@ services:
       - "traefik.http.routers.backend.middlewares=backend-ratelimit"
 
   worker:
-    image: ghcr.io/stefan-seyerl/maintain-github-backend:${IMAGE_TAG:-latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: maintain_worker
     restart: unless-stopped
     command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4
@@ -128,7 +132,9 @@ services:
       - maintain_net
 
   frontend:
-    image: ghcr.io/stefan-seyerl/maintain-github-frontend:${IMAGE_TAG:-latest}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: maintain_frontend
     restart: unless-stopped
     depends_on:

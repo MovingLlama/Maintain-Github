@@ -38,39 +38,17 @@ An AI-powered GitHub repository management platform. Select your GitHub reposito
      └─────────────┘   └─────────────┘  └───────────────┘
 ```
 
-## 🚀 Quick Start
+## 🚀 Quick Start (No git clone needed!)
+
+Docker images are published automatically to GitHub Container Registry (GHCR) on every release.
+You only need `docker` and `curl` — no source code required.
 
 ### Prerequisites
 - Docker & Docker Compose v2
-- A GitHub account
-- (Optional) A server with a public IP and domain for production use
+- A GitHub account with an OAuth App configured (see Step 1 below)
+- A server with a public IP and domain (for production with HTTPS)
 
-### Option A: Interactive Setup (Recommended)
-
-The easiest way to get started is the interactive setup script. It asks you step by step what you need and generates both `.env` and `docker-compose.generated.yml` for you:
-
-```bash
-chmod +x setup.sh
-./setup.sh
-```
-
-The script will guide you through:
-- **PostgreSQL**: New local Docker container or connect to an existing instance
-- **Traefik**: Automatic HTTPS with Let's Encrypt (or skip for Cloudflare Tunnel / local dev)
-- **Ollama**: Local Docker container (with optional GPU support) or external instance
-- **OpenRouter**: Optional API key for cloud AI models (GPT-4, Claude, etc.)
-- **GitHub OAuth**: Client ID & Secret (with callback URL hints)
-- **Secrets**: Automatically generates secure keys
-
-After the script finishes:
-
-```bash
-docker compose -f docker-compose.generated.yml up -d --build
-```
-
-### Option B: Manual Setup
-
-#### 1. Create GitHub OAuth App
+### Step 1: Create GitHub OAuth App
 
 1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
 2. Click **"New OAuth App"**
@@ -80,18 +58,33 @@ docker compose -f docker-compose.generated.yml up -d --build
    - **Authorization callback URL:** `https://yourdomain.com/auth/github/callback`
 4. Copy the **Client ID** and generate a **Client Secret**
 
-#### 2. Configure Environment
+### Step 2: Install
+
+Run the install script — it downloads all required files (compose files, traefik config, env template):
 
 ```bash
-# Create .env from template
-make setup
-# OR:
-cp .env.example .env
+curl -fsSL https://raw.githubusercontent.com/stefan-seyerl/maintain-github/main/install.sh | bash
 ```
 
-Edit `.env` and set at minimum these values:
+Or download and inspect first:
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/stefan-seyerl/maintain-github/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
+```
+
+### Step 3: Configure
+
+Edit the generated `.env` file:
+
+```bash
+nano .env
+```
+
+Set at minimum these values:
+
+```env
 DOMAIN=yourdomain.com
 TRAEFIK_EMAIL=your@email.com
 
@@ -107,94 +100,157 @@ JWT_SECRET_KEY=your_random_jwt_secret
 POSTGRES_PASSWORD=your_db_password
 ```
 
-#### 3. Start the Application
+### Step 4: Start
 
 ```bash
 # Open required firewall ports
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 
-# Build and start all services
-make up-build
+# Pull images from GHCR and start all services
+docker compose up -d
 
 # Follow logs
-make logs
+docker compose logs -f
 ```
 
 Wait until you see: `Database initialized.` and `Application startup complete.`
 
-#### 4. Access the App
+### Step 5: Access
 
 Navigate to `https://yourdomain.com` and log in with GitHub.
 
-#### 5. Pull an AI Model (Optional but Recommended)
+### Step 6: Pull an AI Model (Optional but Recommended)
 
 ```bash
-make ollama-pull
-# Enter model name: llama3:8b
+docker compose exec ollama ollama pull llama3:8b
 ```
 
-## 🛠️ Developer Commands
+---
+
+## 🔧 Minimal Setup (External DB / Cloudflare Tunnel)
+
+If you already have PostgreSQL and Ollama running externally, or prefer Cloudflare Tunnel over Traefik:
 
 ```bash
-make up              # Start all services (detached)
-make up-build        # Build and start
-make down            # Stop all services
-make logs            # Follow all logs
-make logs-backend    # Follow backend + worker logs
-make restart         # Restart all services
+docker compose -f docker-compose.minimal.yml up -d
+```
+
+This starts only: Redis, Backend, Worker, Frontend — no Traefik, Postgres, or Ollama containers.
+See [CLOUDFLARE_TUNNEL.md](CLOUDFLARE_TUNNEL.md) for tunnel setup instructions.
+
+---
+
+## 🔄 Updating
+
+```bash
+# Pull the latest images and restart
+docker compose pull
+docker compose up -d
+
+# Apply any new database migrations
+docker compose exec backend alembic upgrade head
+```
+
+---
+
+## 🛠️ Commands
+
+```bash
+docker compose pull        # Pull latest images from GHCR
+docker compose up -d       # Start all services
+docker compose down        # Stop all services
+docker compose logs -f     # Follow all logs
+docker compose restart     # Restart all services
+
+docker compose exec backend alembic upgrade head   # Apply DB migrations
+docker compose exec postgres psql -U maintain -d maintain_github  # DB shell
+docker compose exec backend /bin/bash              # Backend shell
+docker compose exec ollama ollama pull llama3:8b   # Pull Ollama model
+```
+
+#### Using the Makefile shortcuts
+
+```bash
+make up              # Pull and start production services
+make pull            # Pull latest GHCR images
+make down            # Stop production services
+make logs            # Follow logs
 make clean           # ⚠️ Remove containers AND volumes
-
-make db-migrate msg="description"  # Create migration
-make db-upgrade      # Apply migrations
+make db-upgrade      # Apply pending DB migrations
 make db-shell        # Open psql shell
-
 make shell-backend   # Shell into backend container
-make ollama-pull     # Pull an Ollama model
-make ollama-list     # List installed Ollama models
-make setup           # Initial project setup
-make help            # Show all commands
+make ollama-pull     # Interactive Ollama model pull
+make help            # Show all available commands
 ```
+
+---
+
+## 🧑‍💻 Developer Setup (Local Build)
+
+If you want to modify the source code and build images locally:
+
+```bash
+git clone https://github.com/stefan-seyerl/maintain-github.git
+cd maintain-github
+cp .env.example .env
+nano .env
+
+# Build and start with local source
+make dev-up-build
+
+# Or the minimal dev stack
+make dev-minimal-up-build
+```
+
+---
 
 ## 📁 Project Structure
 
 ```
 Maintain@Github/
-├── setup.sh                # Interactive setup wizard
-├── docker-compose.yml      # Full stack (with Traefik, Postgres, Ollama)
-├── docker-compose.minimal.yml  # Minimal stack (external DB/Ollama)
-├── .env.example            # Environment template (full)
-├── .env.minimal.example    # Environment template (minimal)
-├── Makefile                # Developer shortcuts
-├── ARCHITECTURE.md         # Detailed architecture docs
-├── README.md               # This file
-├── SETUP.md                # Detailed setup guide
+├── install.sh                  # One-liner installer (downloads config, no clone needed)
+├── docker-compose.yml          # Production: full stack using GHCR images
+├── docker-compose.minimal.yml  # Production: minimal stack using GHCR images
+├── docker-compose.dev.yml      # Development: full stack with local build
+├── docker-compose.dev-minimal.yml  # Development: minimal stack with local build
+├── .env.example                # Environment template (full)
+├── .env.minimal.example        # Environment template (minimal)
+├── Makefile                    # Developer shortcuts
+├── ARCHITECTURE.md             # Detailed architecture docs
+├── README.md                   # This file
+├── SETUP.md                    # Detailed setup guide
 │
-├── backend/                # Python FastAPI backend
-│   ├── main.py             # App entry point
-│   ├── entrypoint.sh       # DB wait + migration startup
-│   ├── alembic/            # Database migrations
+├── .github/workflows/
+│   └── docker-publish.yml      # CI: build & push to ghcr.io on push to main / version tags
+│
+├── backend/                    # Python FastAPI backend
+│   ├── main.py                 # App entry point
+│   ├── entrypoint.sh           # DB wait + migration startup
+│   ├── alembic/                # Database migrations
 │   └── app/
-│       ├── api/routes/     # REST API endpoints
-│       ├── core/           # Config, security, middleware
-│       ├── db/             # Database engine & init
-│       ├── models/         # SQLAlchemy ORM models
-│       ├── schemas/        # Pydantic request/response schemas
+│       ├── api/routes/         # REST API endpoints
+│       ├── core/               # Config, security, middleware
+│       ├── db/                 # Database engine & init
+│       ├── models/             # SQLAlchemy ORM models
+│       ├── schemas/            # Pydantic request/response schemas
 │       └── services/
-│           ├── ai/         # Ollama, OpenRouter, Agent runner
-│           └── git/        # Git clone/push/read/write
+│           ├── ai/             # Ollama, OpenRouter, Agent runner
+│           └── git/            # Git clone/push/read/write
 │
-├── frontend/               # React + TypeScript frontend
+├── frontend/                   # React + TypeScript frontend
 │   └── src/
-│       ├── api/            # Axios API clients
-│       ├── components/     # Reusable UI components
-│       ├── hooks/          # Custom React hooks
-│       ├── pages/          # Route page components
-│       ├── stores/         # Zustand state management
-│       └── types/          # TypeScript interfaces
+│       ├── api/                # Axios API clients
+│       ├── components/         # Reusable UI components
+│       ├── hooks/              # Custom React hooks
+│       ├── pages/              # Route page components
+│       ├── stores/             # Zustand state management
+│       └── types/              # TypeScript interfaces
 │
-└── traefik/                # Reverse proxy configuration
+└── traefik/                    # Reverse proxy configuration
 ```
+
+---
 
 ## 🔒 Security Features
 
@@ -253,8 +309,8 @@ docker compose logs traefik
 
 **Ollama model not available:**
 ```bash
-make ollama-list    # Check installed models
-make ollama-pull    # Pull a new model
+docker compose exec ollama ollama list     # Check installed models
+docker compose exec ollama ollama pull llama3:8b  # Pull a new model
 ```
 
 ## 📄 License
