@@ -4,7 +4,7 @@ import { getMe } from '../api/auth'
 import { useAuthStore } from '../stores/authStore'
 
 export function useAuth() {
-  const { user, isLoading, setUser, setLoading } = useAuthStore()
+  const { user: storeUser, isLoading: storeLoading, setUser, setLoading } = useAuthStore()
 
   const { data, isLoading: queryLoading, error } = useQuery({
     queryKey: ['me'],
@@ -19,5 +19,8 @@ export function useAuth() {
     if (error) setUser(null)
   }, [data, queryLoading, error, setUser, setLoading])
 
-  return { user, isLoading: queryLoading }
+  return {
+    user: data || storeUser,
+    isLoading: queryLoading
+  }
 }
