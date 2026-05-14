@@ -101,43 +101,43 @@ class AgentToolExecutor:
         """Execute a tool and return result as string."""
         try:
             if tool_name == "read_file":
-                return self._read_file(arguments["file_path"])
+                return await self._read_file(arguments["file_path"])
             elif tool_name == "write_file":
-                return self._write_file(arguments["file_path"], arguments["content"])
+                return await self._write_file(arguments["file_path"], arguments["content"])
             elif tool_name == "list_files":
-                return self._list_files(arguments.get("directory", ""))
+                return await self._list_files(arguments.get("directory", ""))
             elif tool_name == "get_git_diff":
-                return self._get_diff()
+                return await self._get_diff()
             elif tool_name == "get_git_log":
-                return self._get_log(arguments.get("max_count", 10))
+                return await self._get_log(arguments.get("max_count", 10))
             elif tool_name == "search_in_files":
-                return self._search_files(arguments["pattern"], arguments.get("file_pattern", "*"))
+                return await self._search_files(arguments["pattern"], arguments.get("file_pattern", "*"))
             else:
                 return f"Unknown tool: {tool_name}"
         except Exception as e:
             return f"Error executing {tool_name}: {str(e)}"
 
-    def _read_file(self, file_path: str) -> str:
-        content = git_service.read_file(self.user_id, self.repo_full_name, file_path)
+    async def _read_file(self, file_path: str) -> str:
+        content = await git_service.read_file(self.user_id, self.repo_full_name, file_path)
         return f"File: {file_path}\n\n{content}"
 
-    def _write_file(self, file_path: str, content: str) -> str:
-        git_service.write_file(self.user_id, self.repo_full_name, file_path, content)
+    async def _write_file(self, file_path: str, content: str) -> str:
+        await git_service.write_file(self.user_id, self.repo_full_name, file_path, content)
         return f"Successfully wrote {len(content)} chars to {file_path}"
 
-    def _list_files(self, directory: str = "") -> str:
-        files = git_service.get_file_tree(self.user_id, self.repo_full_name)
+    async def _list_files(self, directory: str = "") -> str:
+        files = await git_service.get_file_tree(self.user_id, self.repo_full_name)
         if directory:
             files = [f for f in files if f["path"].startswith(directory)]
         lines = [f"{'[DIR] ' if f['type'] == 'directory' else '[FILE]'} {f['path']}" for f in files]
         return "\n".join(lines) if lines else "No files found."
 
-    def _get_diff(self) -> str:
-        diff = git_service.get_diff(self.user_id, self.repo_full_name)
+    async def _get_diff(self) -> str:
+        diff = await git_service.get_diff(self.user_id, self.repo_full_name)
         return diff if diff else "No uncommitted changes."
 
-    def _get_log(self, max_count: int = 10) -> str:
-        commits = git_service.get_log(self.user_id, self.repo_full_name, max_count)
+    async def _get_log(self, max_count: int = 10) -> str:
+        commits = await git_service.get_log(self.user_id, self.repo_full_name, max_count)
         lines = [f"{c['sha']} - {c['date'][:10]} - {c['author']}: {c['message'][:80]}" for c in commits]
         return "\n".join(lines) if lines else "No commits found."
 

@@ -25,7 +25,7 @@ def get_github_auth_url(state: str) -> str:
     return f"{GITHUB_OAUTH_URL}?{query}"
 
 async def exchange_code_for_token(code: str) -> Optional[str]:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
         response = await client.post(
             GITHUB_TOKEN_URL,
             data={
@@ -39,7 +39,7 @@ async def exchange_code_for_token(code: str) -> Optional[str]:
         return data.get("access_token")
 
 async def get_github_user(token: str) -> dict:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
         response = await client.get(
             f"{GITHUB_API_BASE}/user",
             headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"},
@@ -48,7 +48,7 @@ async def get_github_user(token: str) -> dict:
         return response.json()
 
 async def get_user_repos(token: str, page: int = 1, per_page: int = 30) -> list[dict]:
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
         response = await client.get(
             f"{GITHUB_API_BASE}/user/repos",
             params={"page": page, "per_page": per_page, "sort": "updated", "affiliation": "owner"},

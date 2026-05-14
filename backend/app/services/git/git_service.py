@@ -70,40 +70,54 @@ class GitService:
         await loop.run_in_executor(None, _pull)
         return repo_path
 
-    def get_file_tree(self, user_id: str, repo_full_name: str) -> list[dict]:
+    async def get_file_tree(self, user_id: str, repo_full_name: str) -> list[dict]:
         repo_path = self._get_repo_path(user_id, repo_full_name)
         if not repo_path.exists():
             return []
         
-        result = []
-        for item in sorted(repo_path.rglob("*")):
-            if ".git" in item.parts:
-                continue
-            rel = item.relative_to(repo_path)
-            result.append({
-                "path": str(rel),
-                "type": "directory" if item.is_dir() else "file",
-                "size": item.stat().st_size if item.is_file() else None,
-            })
-        return result
+        def _walk():
+            result = []
+            for item in sorted(repo_path.rglob("*")):
+                if ".git" in item.parts:
+                    continue
+                rel = item.relative_to(repo_path)
+                result.append({
+                    "path": str(rel),
+                    "type": "directory" if item.is_dir() else "file",
+                    "size": item.stat().st_size if item.is_file() else None,
+                })
+            return result
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _walk)
 
-    def read_file(self, user_id: str, repo_full_name: str, file_path: str) -> str:
+    async def read_file(self, user_id: str, repo_full_name: str, file_path: str) -> str:
         repo_path = self._get_repo_path(user_id, repo_full_name)
         # Security: prevent path traversal
         full_path = (repo_path / file_path).resolve()
         if not str(full_path).startswith(str(repo_path.resolve())):
             raise PermissionError("Path traversal attempt detected")
-        return full_path.read_text(encoding="utf-8", errors="replace")
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: full_path.read_text(encoding="utf-8", errors="replace"),
+        )
 
-    def write_file(self, user_id: str, repo_full_name: str, file_path: str, content: str) -> None:
+    async def write_file(self, user_id: str, repo_full_name: str, file_path: str, content: str) -> None:
         repo_path = self._get_repo_path(user_id, repo_full_name)
         full_path = (repo_path / file_path).resolve()
         if not str(full_path).startswith(str(repo_path.resolve())):
             raise PermissionError("Path traversal attempt detected")
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_text(content, encoding="utf-8")
+        
+        def _write():
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            full_path.write_text(content, encoding="utf-8")
+        
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _write)
 
-    def commit_and_push(
+    async def commit_and_push(
         self,
         github_token: str,
         repo_full_name: str,
@@ -115,49 +129,62 @@ class GitService:
         repo_path = self._get_repo_path(user_id, repo_full_name)
         auth_url = self._get_auth_url(github_token, repo_full_name)
         
-        repo = Repo(str(repo_path))
-        repo.config_writer().set_value("user", "name", author_name).release()
-        repo.config_writer().set_value("user", "email", author_email or "noreply@example.com").release()
+        def _commit_push():
+            repo = Repo(str(repo_path))
+            repo.config_writer().set_value("user", "name", author_name).release()
+            repo.config_writer().set_value("user", "email", author_email or "noreply@example.com").release()
+            
+            repo.git.add(A=True)
+            if not repo.index.diff("HEAD"):
+                logger.info("No changes to commit.")
+                return "No changes to commit."
+            
+            commit = repo.index.commit(commit_message)
+            with repo.remotes.origin.config_writer as cw:
+                cw.set("url", auth_url)
+            repo.remotes.origin.push()
+            logger.info(f"Pushed commit {commit.hexsha} to {repo_full_name}")
+            return commit.hexsha
         
-        repo.git.add(A=True)
-        if not repo.index.diff("HEAD"):
-            logger.info("No changes to commit.")
-            return "No changes to commit."
-        
-        commit = repo.index.commit(commit_message)
-        with repo.remotes.origin.config_writer as cw:
-            cw.set("url", auth_url)
-        repo.remotes.origin.push()
-        logger.info(f"Pushed commit {commit.hexsha} to {repo_full_name}")
-        return commit.hexsha
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _commit_push)
 
-    def get_diff(self, user_id: str, repo_full_name: str) -> str:
+    async def get_diff(self, user_id: str, repo_full_name: str) -> str:
         repo_path = self._get_repo_path(user_id, repo_full_name)
-        repo = Repo(str(repo_path))
-        return repo.git.diff()
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: Repo(str(repo_path)).git.diff())
 
-    def get_log(self, user_id: str, repo_full_name: str, max_count: int = 20) -> list[dict]:
+    async def get_log(self, user_id: str, repo_full_name: str, max_count: int = 20) -> list[dict]:
         repo_path = self._get_repo_path(user_id, repo_full_name)
-        repo = Repo(str(repo_path))
-        commits = []
-        for commit in repo.iter_commits(max_count=max_count):
-            commits.append({
-                "sha": commit.hexsha[:8],
-                "message": commit.message.strip(),
-                "author": commit.author.name,
-                "date": commit.authored_datetime.isoformat(),
-            })
-        return commits
+        def _log():
+            repo = Repo(str(repo_path))
+            commits = []
+            for commit in repo.iter_commits(max_count=max_count):
+                commits.append({
+                    "sha": commit.hexsha[:8],
+                    "message": commit.message.strip(),
+                    "author": commit.author.name,
+                    "date": commit.authored_datetime.isoformat(),
+                })
+            return commits
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _log)
 
-    def list_branches(self, user_id: str, repo_full_name: str) -> list[str]:
+    async def list_branches(self, user_id: str, repo_full_name: str) -> list[str]:
         repo_path = self._get_repo_path(user_id, repo_full_name)
-        repo = Repo(str(repo_path))
-        return [b.name for b in repo.branches]
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: [b.name for b in Repo(str(repo_path)).branches],
+        )
 
-    def checkout_branch(self, user_id: str, repo_full_name: str, branch: str, create: bool = False) -> None:
+    async def checkout_branch(self, user_id: str, repo_full_name: str, branch: str, create: bool = False) -> None:
         repo_path = self._get_repo_path(user_id, repo_full_name)
-        repo = Repo(str(repo_path))
-        if create:
-            repo.git.checkout("-b", branch)
-        else:
-            repo.git.checkout(branch)
+        def _checkout():
+            repo = Repo(str(repo_path))
+            if create:
+                repo.git.checkout("-b", branch)
+            else:
+                repo.git.checkout(branch)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _checkout)

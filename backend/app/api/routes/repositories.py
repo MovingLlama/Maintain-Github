@@ -23,7 +23,11 @@ git_service = GitService()
 def _get_github_token(user: User) -> str:
     if not user.github_access_token_encrypted:
         raise HTTPException(status_code=400, detail="GitHub token not available")
-    return decrypt_token(user.github_access_token_encrypted)
+    try:
+        return decrypt_token(user.github_access_token_encrypted)
+    except Exception as e:
+        logger.error(f"Failed to decrypt GitHub token: {e}")
+        raise HTTPException(status_code=500, detail="Failed to decrypt GitHub token. Please re-authenticate.")
 
 @router.get("/github", response_model=list[GitHubRepoListItem])
 async def list_github_repos(
@@ -99,8 +103,8 @@ async def _clone_repo_background(
 ):
     from app.db.base import AsyncSessionLocal
     from datetime import datetime, timezone
-    async with AsyncSessionLocal() as db:
-        try:
+    try:
+        async with AsyncSessionLocal() as db:
             result = await db.execute(select(Repository).where(Repository.id == repo_id))
             repo = result.scalar_one_or_none()
             if not repo:
@@ -111,14 +115,15 @@ async def _clone_repo_background(
             repo.status = RepoStatus.READY
             repo.last_synced_at = datetime.now(timezone.utc)
             await db.commit()
-        except Exception as e:
-            logger.error(f"Clone failed: {e}")
-            async with AsyncSessionLocal() as db2:
-                result = await db2.execute(select(Repository).where(Repository.id == repo_id))
-                repo = result.scalar_one_or_none()
-                if repo:
-                    repo.status = RepoStatus.ERROR
-                    await db2.commit()
+    except Exception as e:
+        logger.error(f"Clone failed for repo {repo_id}: {e}", exc_info=True)
+        # Use a fresh session to update status to ERROR
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Repository).where(Repository.id == repo_id))
+            repo = result.scalar_one_or_none()
+            if repo:
+                repo.status = RepoStatus.ERROR
+                await db.commit()
 
 @router.get("/{repo_id}", response_model=RepositoryResponse)
 async def get_repository(
@@ -149,7 +154,7 @@ async def get_repository_files(
     if repo.status != RepoStatus.READY:
         raise HTTPException(status_code=400, detail=f"Repository is not ready (status: {repo.status})")
     
-    files = git_service.get_file_tree(str(current_user.id), repo.full_name)
+    files = await git_service.get_file_tree(str(current_user.id), repo.full_name)
     return {"files": files}
 
 @router.get("/{repo_id}/files/{file_path:path}")
@@ -167,7 +172,7 @@ async def read_repository_file(
         raise HTTPException(status_code=404, detail="Repository not found")
     
     try:
-        content = git_service.read_file(str(current_user.id), repo.full_name, file_path)
+        content = await git_service.read_file(str(current_user.id), repo.full_name, file_path)
         return {"path": file_path, "content": content}
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -195,7 +200,7 @@ async def write_repository_file(
         raise HTTPException(status_code=404, detail="Repository not found")
     
     try:
-        git_service.write_file(str(current_user.id), repo.full_name, file_path, payload.content)
+        await git_service.write_file(str(current_user.id), repo.full_name, file_path, payload.content)
         return {"message": "File updated", "path": file_path}
     except PermissionError:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -220,7 +225,7 @@ async def commit_and_push(
     token = _get_github_token(current_user)
     
     try:
-        sha = git_service.commit_and_push(
+        sha = await git_service.commit_and_push(
             token,
             repo.full_name,
             str(current_user.id),
