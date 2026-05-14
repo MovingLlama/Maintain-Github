@@ -11,6 +11,8 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME_BACKEND: ${{ github.repository_owner }}/maintain-github-backend
   IMAGE_NAME_FRONTEND: ${{ github.repository_owner }}/maintain-github-frontend
+  # Opt into Node.js 24 for GitHub Actions to fix deprecation warnings
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-push:
@@ -54,7 +56,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push Backend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./backend
           push: true
@@ -65,7 +67,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push Frontend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: ./frontend
           push: true
@@ -85,50 +87,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-          OWNER: ${{ github.repository_owner }}
-          REPO: ${{ github.repository }}
-        run: |
-          PREV_TAG=$(git tag --sort=-version:refname | sed -n '2p')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            ## Docker Images
 
-          # Fetch auto-generated release notes from the GitHub API
-          PAYLOAD=$(jq -n \
-            --arg tag "$TAG" \
-            --arg prev "$PREV_TAG" \
-            '{tag_name: $tag, previous_tag_name: (if $prev != "" then $prev else null end)}')
+            | Image | Tag |
+            |-------|-----|
+            | `ghcr.io/${{ github.repository_owner }}/maintain-github-backend` | `${{ github.ref_name }}` |
+            | `ghcr.io/${{ github.repository_owner }}/maintain-github-frontend` | `${{ github.ref_name }}` |
 
-          GENERATED=$(gh api "repos/${REPO}/releases/generate-notes" \
-            --method POST \
-            --input <(echo "$PAYLOAD") \
-            --jq '.body')
+            ### Quick Start
 
-          # Combine Docker image table with the generated changelog
-          cat > release-notes.md << EOF
-          ## Docker Images
-
-          | Image | Tag |
-          |-------|-----|
-          | \`ghcr.io/${OWNER}/maintain-github-backend\` | \`${TAG}\` |
-          | \`ghcr.io/${OWNER}/maintain-github-frontend\` | \`${TAG}\` |
-
-          ### Quick Start
-
-          \`\`\`bash
-          docker pull ghcr.io/${OWNER}/maintain-github-backend:${TAG}
-          docker pull ghcr.io/${OWNER}/maintain-github-frontend:${TAG}
-          \`\`\`
-
-          ---
-
-          ${GENERATED}
-          EOF
-
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes-file release-notes.md
+            ```bash
+            docker pull ghcr.io/${{ github.repository_owner }}/maintain-github-backend:${{ github.ref_name }}
+            docker pull ghcr.io/${{ github.repository_owner }}/maintain-github-frontend:${{ github.ref_name }}
+            ```
