@@ -39,7 +39,6 @@ async def github_callback(
     code: str,
     state: str,
     request: Request,
-    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
     """Handle GitHub OAuth callback"""
@@ -66,8 +65,12 @@ async def github_callback(
         ip_address=request.client.host if request.client else None,
     )
     
-    # Set cookies
-    response.set_cookie(
+    # Redirect to frontend
+    frontend_url = f"https://{settings.domain}" if not settings.debug else "http://localhost:5173"
+    redirect = RedirectResponse(url=f"{frontend_url}/auth/success", status_code=302)
+    
+    # Set cookies directly on the RedirectResponse
+    redirect.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
@@ -76,7 +79,7 @@ async def github_callback(
         path="/",
         max_age=settings.jwt_access_token_expire_minutes * 60,
     )
-    response.set_cookie(
+    redirect.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
@@ -86,9 +89,7 @@ async def github_callback(
         max_age=settings.jwt_refresh_token_expire_days * 24 * 3600,
     )
     
-    # Redirect to frontend
-    frontend_url = f"https://{settings.domain}" if not settings.debug else "http://localhost:5173"
-    return RedirectResponse(url=f"{frontend_url}/auth/success", status_code=302)
+    return redirect
 
 @router.post("/refresh")
 async def refresh_token(
