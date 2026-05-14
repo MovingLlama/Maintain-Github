@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import api from '../api/client'
 
 type WSMessage = { type: string; [key: string]: any }
 
@@ -6,28 +7,44 @@ export function useWebSocket(onMessage?: (msg: WSMessage) => void) {
   const ws = useRef<WebSocket | null>(null)
 
   useEffect(() => {
-    const token = document.cookie.match(/access_token=([^;]+)/)?.[1]
-    if (!token) return
+    let cancelled = false
 
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    ws.current = new WebSocket(`${protocol}://${window.location.host}/ws?token=${token}`)
-
-    ws.current.onopen = () => {
-      // Send ping every 30s
-      const ping = setInterval(() => {
-        ws.current?.send(JSON.stringify({ type: 'ping' }))
-      }, 30000)
-      ws.current!.onclose = () => clearInterval(ping)
-    }
-
-    ws.current.onmessage = (e) => {
+    const connect = async () => {
       try {
-        const msg = JSON.parse(e.data)
-        onMessage?.(msg)
-      } catch {}
+        // access_token is httpOnly — JS cannot read it from document.cookie.
+        // Fetch a WS token from the API instead.
+        const { data } = await api.get<{ token: string }>('/auth/ws-token')
+        if (cancelled) return
+
+        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+        ws.current = new WebSocket(
+          `${protocol}://${window.location.host}/ws?token=${data.token}`
+        )
+
+        ws.current.onopen = () => {
+          const ping = setInterval(() => {
+            ws.current?.send(JSON.stringify({ type: 'ping' }))
+          }, 30000)
+          ws.current!.onclose = () => clearInterval(ping)
+        }
+
+        ws.current.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data)
+            onMessage?.(msg)
+          } catch {}
+        }
+      } catch {
+        // Not authenticated or network error — WebSocket intentionally not opened.
+      }
     }
 
-    return () => ws.current?.close()
+    connect()
+
+    return () => {
+      cancelled = true
+      ws.current?.close()
+    }
   }, [])
 
   return ws

@@ -7,6 +7,7 @@ import { RepositoriesPage } from './pages/RepositoriesPage'
 import { ChatPage } from './pages/ChatPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { useAuth } from './hooks/useAuth'
+import { ErrorBoundary } from './components/common/ErrorBoundary'
 
 const queryClient = new QueryClient()
 
@@ -48,10 +49,12 @@ function AppRoutes() {
 
 export function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }

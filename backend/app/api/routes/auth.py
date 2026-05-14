@@ -149,6 +149,18 @@ async def logout(
     response.delete_cookie("refresh_token")
     return {"message": "Logged out successfully"}
 
+@router.get("/ws-token")
+async def get_ws_token(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Return the current access token so the frontend can authenticate a WebSocket
+    connection via ?token=... (httpOnly cookies are not readable from JS)."""
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="No access token")
+    return {"token": token}
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
