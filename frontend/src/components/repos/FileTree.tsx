@@ -108,7 +108,7 @@ function TreeNodeView({ node, depth, onFileSelect, selectedFile }: TreeNodeViewP
 }
 
 export function FileTree({ files, onFileSelect, selectedFile }: FileTreeProps) {
-  const tree = buildTree(files)
+  const tree = buildTree(Array.isArray(files) ? files : [])
 
   if (tree.length === 0) {
     return <p className="text-xs text-gray-500 text-center py-4">No files found</p>

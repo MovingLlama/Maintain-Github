@@ -82,7 +82,7 @@ export function ChatPage() {
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {chats.length === 0 ? (
+          {!Array.isArray(chats) || chats.length === 0 ? (
             <div className="text-center py-8">
               <MessageSquare className="w-8 h-8 text-gray-600 mx-auto mb-2" />
               <p className="text-xs text-gray-500">No chats yet</p>
