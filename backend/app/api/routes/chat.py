@@ -286,7 +286,7 @@ Title:"""
             title = title[:77] + "..."
 
         chat.title = title or "New Chat"
-        await db.flush()
+        await db.commit()
 
         return {"id": str(chat.id), "title": chat.title}
 
