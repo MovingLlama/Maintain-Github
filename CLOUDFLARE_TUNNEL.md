@@ -76,6 +76,8 @@ ALLOWED_ORIGINS=https://yourdomain.com
 DEBUG=false
 ```
 
+> **⚠️ Wichtig:** Der `GITHUB_REDIRECT_URI` muss über deine Haupt-Domain laufen (nicht über eine api-Subdomain), da der Cloudflare Tunnel den Traffic über den Frontend-Nginx-Proxy leitet, der `/auth/`-Requests an das Backend weiterreicht. Der gleiche Callback muss auch in den [GitHub OAuth App Settings](https://github.com/settings/developers) hinterlegt sein.
+
 ## Sicherheitshinweis
 
 Mit Cloudflare Tunnel:

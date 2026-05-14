@@ -1,5 +1,7 @@
-import api from './client'
+import axios from 'axios'
 import { User } from '../types'
 
-export const getMe = () => api.get<User>('/auth/me').then(r => r.data)
-export const logout = () => api.post('/auth/logout')
+const authApi = axios.create({ withCredentials: true })
+
+export const getMe = () => authApi.get<User>('/auth/me').then(r => r.data)
+export const logout = () => authApi.post('/auth/logout')

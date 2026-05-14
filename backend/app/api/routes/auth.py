@@ -73,6 +73,7 @@ async def github_callback(
         httponly=True,
         secure=not settings.debug,
         samesite="lax",
+        path="/",
         max_age=settings.jwt_access_token_expire_minutes * 60,
     )
     response.set_cookie(
@@ -81,6 +82,7 @@ async def github_callback(
         httponly=True,
         secure=not settings.debug,
         samesite="lax",
+        path="/",
         max_age=settings.jwt_refresh_token_expire_days * 24 * 3600,
     )
     
@@ -126,6 +128,7 @@ async def refresh_token(
         httponly=True,
         secure=not settings.debug,
         samesite="lax",
+        path="/",
         max_age=settings.jwt_access_token_expire_minutes * 60,
     )
     return {"message": "Token refreshed"}
@@ -145,8 +148,8 @@ async def logout(
         if session:
             session.is_revoked = True
     
-    response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/")
     return {"message": "Logged out successfully"}
 
 @router.get("/ws-token")
