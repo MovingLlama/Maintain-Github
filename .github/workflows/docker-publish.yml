@@ -85,23 +85,50 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          body: |
-            ## Docker Images
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | sed -n '2p')
 
-            | Image | Tag |
-            |-------|-----|
-            | `ghcr.io/${{ github.repository_owner }}/maintain-github-backend` | `${{ github.ref_name }}` |
-            | `ghcr.io/${{ github.repository_owner }}/maintain-github-frontend` | `${{ github.ref_name }}` |
+          # Fetch auto-generated release notes from the GitHub API
+          PAYLOAD=$(jq -n \
+            --arg tag "$TAG" \
+            --arg prev "$PREV_TAG" \
+            '{tag_name: $tag, previous_tag_name: (if $prev != "" then $prev else null end)}')
 
-            ### Quick Start
+          GENERATED=$(gh api "repos/${REPO}/releases/generate-notes" \
+            --method POST \
+            --input <(echo "$PAYLOAD") \
+            --jq '.body')
 
-            Pull the images:
-            ```bash
-            docker pull ghcr.io/${{ github.repository_owner }}/maintain-github-backend:${{ github.ref_name }}
-            docker pull ghcr.io/${{ github.repository_owner }}/maintain-github-frontend:${{ github.ref_name }}
-            ```
+          # Combine Docker image table with the generated changelog
+          cat > release-notes.md << EOF
+          ## Docker Images
+
+          | Image | Tag |
+          |-------|-----|
+          | \`ghcr.io/${OWNER}/maintain-github-backend\` | \`${TAG}\` |
+          | \`ghcr.io/${OWNER}/maintain-github-frontend\` | \`${TAG}\` |
+
+          ### Quick Start
+
+          \`\`\`bash
+          docker pull ghcr.io/${OWNER}/maintain-github-backend:${TAG}
+          docker pull ghcr.io/${OWNER}/maintain-github-frontend:${TAG}
+          \`\`\`
+
+          ---
+
+          ${GENERATED}
+          EOF
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file release-notes.md
