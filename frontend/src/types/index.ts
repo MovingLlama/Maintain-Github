@@ -72,6 +72,11 @@ export interface AIModel {
   context_length?: number
 }
 
+export interface UserSettings {
+  enabled_models: string[]           // composite keys: "provider:model_id"
+  default_chat_model: string | null  // composite key or null
+}
+
 export interface FileTreeItem {
   path: string
   type: 'file' | 'directory'
