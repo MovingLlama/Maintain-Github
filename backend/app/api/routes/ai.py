@@ -21,6 +21,26 @@ async def list_models(current_user: User = Depends(get_current_user)):
     }
 
 
+from pydantic import BaseModel
+
+class PullModelBody(BaseModel):
+    model_name: str
+
+
+@router.post("/ollama/pull")
+async def pull_ollama_model(
+    payload: PullModelBody,
+    current_user: User = Depends(get_current_user),
+):
+    """Pull a model into the local Ollama instance."""
+    try:
+        result = await ai_service.pull_ollama_model(payload.model_name)
+        return {"status": "ok", "detail": result}
+    except Exception as e:
+        logger.error(f"Failed to pull model {payload.model_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/tools")
 async def list_agent_tools(current_user: User = Depends(get_current_user)):
     """List available agent tools."""

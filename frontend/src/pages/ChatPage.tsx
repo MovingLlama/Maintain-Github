@@ -1,26 +1,80 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listChats, createChat, deleteChat, listMessages, sendMessage } from '../api/chats'
 import { listModels } from '../api/ai'
+import { getUserSettings } from '../api/settings'
 import { ChatMessage } from '../components/chat/ChatMessage'
 import { ChatInput } from '../components/chat/ChatInput'
 import { Button } from '../components/common/Button'
-import { Chat, Message } from '../types'
-import { Plus, Trash2, MessageSquare, Bot } from 'lucide-react'
+import { Chat, Message, AIModel } from '../types'
+import { Plus, Trash2, MessageSquare, Bot, ChevronDown } from 'lucide-react'
+
+function modelKey(provider: string, modelId: string) {
+  return `${provider}:${modelId}`
+}
 
 export function ChatPage() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [localMessages, setLocalMessages] = useState<Message[]>([])
+  const [selectedModelKey, setSelectedModelKey] = useState<string | null>(null)
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
 
   const { data: chats = [] } = useQuery({ queryKey: ['chats'], queryFn: listChats })
   const { data: models } = useQuery({ queryKey: ['models'], queryFn: listModels })
+  const { data: settings } = useQuery({
+    queryKey: ['userSettings'],
+    queryFn: getUserSettings,
+  })
   const { data: messages = [] } = useQuery({
     queryKey: ['messages', activeChatId],
     queryFn: () => listMessages(activeChatId!),
     enabled: !!activeChatId,
   })
+
+  // Build list of enabled models (fall back to all models if none enabled)
+  const enabledModels = useMemo(() => {
+    const all: AIModel[] = [
+      ...(models?.ollama ?? []),
+      ...(models?.openrouter ?? []),
+    ]
+    const enabledKeys = settings?.enabled_models
+    if (!enabledKeys || enabledKeys.length === 0) return all
+    return all.filter(m => enabledKeys.includes(modelKey(m.provider, m.id)))
+  }, [models, settings])
+
+  // Determine the default model to pre-select
+  const defaultModelKey = useMemo(() => {
+    if (settings?.default_chat_model && enabledModels.some(
+      m => modelKey(m.provider, m.id) === settings.default_chat_model
+    )) {
+      return settings.default_chat_model
+    }
+    if (enabledModels.length > 0) {
+      return modelKey(enabledModels[0].provider, enabledModels[0].id)
+    }
+    return null
+  }, [enabledModels, settings])
+
+  // Initialize selected model on first load
+  useEffect(() => {
+    if (!selectedModelKey && defaultModelKey) {
+      setSelectedModelKey(defaultModelKey)
+    }
+  }, [defaultModelKey, selectedModelKey])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowModelDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   useEffect(() => {
     setLocalMessages(messages)
@@ -30,8 +84,22 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [localMessages])
 
+  const getModelToCreate = (): { model_provider: 'ollama' | 'openrouter'; model_name: string | null } => {
+    const key = selectedModelKey || defaultModelKey
+    if (!key) return { model_provider: 'ollama', model_name: null }
+    const colonIdx = key.indexOf(':')
+    const provider = key.substring(0, colonIdx) as 'ollama' | 'openrouter'
+    return {
+      model_provider: provider,
+      model_name: key.substring(colonIdx + 1),
+    }
+  }
+
   const createMutation = useMutation({
-    mutationFn: () => createChat({ title: 'New Chat', model_provider: 'ollama', model_name: models?.ollama[0]?.id }),
+    mutationFn: () => {
+      const { model_provider, model_name } = getModelToCreate()
+      return createChat({ title: 'New Chat', model_provider, model_name })
+    },
     onSuccess: (chat) => { qc.invalidateQueries({ queryKey: ['chats'] }); setActiveChatId(chat.id) },
   })
 
@@ -71,15 +139,69 @@ export function ChatPage() {
     },
   })
 
+  const selectedModel = enabledModels.find(m => modelKey(m.provider, m.id) === selectedModelKey)
+
   return (
     <div className="h-full flex">
       {/* Sidebar: Chat List */}
       <div className="w-64 border-r border-gray-800 flex flex-col bg-gray-900">
-        <div className="p-3 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Chats</h2>
-          <Button size="sm" variant="ghost" onClick={() => createMutation.mutate()} isLoading={createMutation.isPending}>
-            <Plus className="w-4 h-4" />
-          </Button>
+        <div className="p-3 border-b border-gray-800 space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white">Chats</h2>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => createMutation.mutate()}
+              isLoading={createMutation.isPending}
+              disabled={enabledModels.length === 0}
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Model Selector */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setShowModelDropdown(!showModelDropdown)}
+              disabled={enabledModels.length === 0}
+              className="w-full flex items-center justify-between gap-1 px-2 py-1.5 rounded-md bg-gray-800 border border-gray-700 text-xs text-gray-300 hover:border-gray-600 transition-colors disabled:opacity-50"
+            >
+              <span className="truncate">
+                {selectedModel ? selectedModel.name : enabledModels.length === 0 ? 'No models enabled' : 'Select model'}
+              </span>
+              <ChevronDown className={`w-3 h-3 flex-shrink-0 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
+            </button>
+            {showModelDropdown && enabledModels.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
+                {/* Group by provider */}
+                {['ollama', 'openrouter'].map(provider => {
+                  const providerModels = enabledModels.filter(m => m.provider === provider)
+                  if (providerModels.length === 0) return null
+                  return (
+                    <div key={provider}>
+                      <div className="px-2 py-1 text-[10px] text-gray-500 uppercase font-semibold">
+                        {provider}
+                      </div>
+                      {providerModels.map(model => (
+                        <button
+                          key={modelKey(model.provider, model.id)}
+                          onClick={() => {
+                            setSelectedModelKey(modelKey(model.provider, model.id))
+                            setShowModelDropdown(false)
+                          }}
+                          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 transition-colors ${
+                            modelKey(model.provider, model.id) === selectedModelKey ? 'text-sky-300 bg-sky-900/20' : 'text-gray-300'
+                          }`}
+                        >
+                          <span className="truncate block">{model.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {!Array.isArray(chats) || chats.length === 0 ? (
@@ -141,7 +263,11 @@ export function ChatPage() {
               <Bot className="w-16 h-16 text-gray-700 mx-auto" />
               <h3 className="text-xl font-semibold text-white">AI Chat Assistant</h3>
               <p className="text-gray-400 text-sm max-w-xs">Select a chat or create a new one to start talking with your AI assistant</p>
-              <Button onClick={() => createMutation.mutate()} isLoading={createMutation.isPending}>
+              <Button
+                onClick={() => createMutation.mutate()}
+                isLoading={createMutation.isPending}
+                disabled={enabledModels.length === 0}
+              >
                 <Plus className="w-4 h-4" />
                 New Chat
               </Button>

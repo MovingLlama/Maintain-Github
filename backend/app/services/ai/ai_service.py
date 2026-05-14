@@ -93,6 +93,16 @@ class AIService:
             resp.raise_for_status()
             return resp.json()
 
+    async def pull_ollama_model(self, model_name: str) -> dict:
+        """Pull a model from Ollama registry."""
+        async with httpx.AsyncClient(timeout=600) as client:
+            resp = await client.post(
+                f"{settings.ollama_base_url}/api/pull",
+                json={"name": model_name, "stream": False},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def stream_ollama(
         self,
         model: str,

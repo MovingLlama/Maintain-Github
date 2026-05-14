@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listModels } from '../api/ai'
+import { listModels, pullOllamaModel } from '../api/ai'
 import { getUserSettings, updateUserSettings } from '../api/settings'
 import { useAuthStore } from '../stores/authStore'
-import { Github, Cpu, Cloud, Shield, Star, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Github, Cpu, Cloud, Shield, Star, ToggleLeft, ToggleRight, Download, Loader2 } from 'lucide-react'
 import { AIModel } from '../types'
 
 /** Derive composite key from provider + model id */
@@ -14,6 +14,9 @@ function modelKey(provider: string, modelId: string) {
 export function SettingsPage() {
   const { user } = useAuthStore()
   const qc = useQueryClient()
+  const [pullModelName, setPullModelName] = useState('')
+  const [pullMessage, setPullMessage] = useState<string | null>(null)
+  const pullInputRef = useRef<HTMLInputElement>(null)
 
   const { data: models } = useQuery({ queryKey: ['models'], queryFn: listModels })
   const { data: settings, isLoading: settingsLoading } = useQuery({
@@ -24,6 +27,21 @@ export function SettingsPage() {
   const saveMutation = useMutation({
     mutationFn: updateUserSettings,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['userSettings'] }),
+  })
+
+  const pullMutation = useMutation({
+    mutationFn: pullOllamaModel,
+    onSuccess: () => {
+      setPullMessage('Model pulled successfully! Refreshing…')
+      setPullModelName('')
+      qc.invalidateQueries({ queryKey: ['models'] })
+      setTimeout(() => setPullMessage(null), 3000)
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail || err?.message || 'Unknown error'
+      setPullMessage(`Pull failed: ${detail}`)
+      setTimeout(() => setPullMessage(null), 6000)
+    },
   })
 
   const enabledModels = settings?.enabled_models ?? []
@@ -172,6 +190,40 @@ export function SettingsPage() {
                     <p className="text-xs text-gray-500 italic py-2">No models found</p>
                   )}
                 </div>
+                {/* Pull new model section – only for Ollama */}
+                {provider === 'ollama' && (
+                  <div className="pt-2 border-t border-gray-700 space-y-1.5">
+                    <p className="text-[10px] text-gray-500 uppercase font-semibold">Pull new model</p>
+                    <div className="flex gap-1.5">
+                      <input
+                        ref={pullInputRef}
+                        type="text"
+                        value={pullModelName}
+                        onChange={e => setPullModelName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && pullModelName.trim() && pullMutation.mutate(pullModelName.trim())}
+                        placeholder="e.g. llama3:8b"
+                        className="flex-1 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded-md text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                      />
+                      <button
+                        onClick={() => pullModelName.trim() && pullMutation.mutate(pullModelName.trim())}
+                        disabled={pullMutation.isPending || !pullModelName.trim()}
+                        className="px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-md flex items-center gap-1 transition-colors"
+                      >
+                        {pullMutation.isPending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Download className="w-3 h-3" />
+                        )}
+                        Pull
+                      </button>
+                    </div>
+                    {pullMessage && (
+                      <p className={`text-[11px] ${pullMessage.startsWith('Pull failed') ? 'text-red-400' : 'text-green-400'}`}>
+                        {pullMessage}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
