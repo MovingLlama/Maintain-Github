@@ -73,8 +73,9 @@ export interface AIModel {
 }
 
 export interface UserSettings {
-  enabled_models: string[]           // composite keys: "provider:model_id"
-  default_chat_model: string | null  // composite key or null
+  enabled_models: string[]              // composite keys: "provider:model_id"
+  default_chat_model: string | null     // composite key or null
+  title_generation_model: string | null // composite key – model used to auto-generate chat titles
 }
 
 export interface FileTreeItem {

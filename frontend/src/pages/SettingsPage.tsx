@@ -78,6 +78,17 @@ export function SettingsPage() {
     saveMutation.mutate({ default_chat_model: key })
   }
 
+  const titleModel = settings?.title_generation_model ?? null
+
+  const setTitleModel = (key: string | null) => {
+    saveMutation.mutate({ title_generation_model: key })
+  }
+
+  // Build flat list of all enabled models for selectors
+  const flatEnabledModels = (models?.ollama ?? [])
+    .concat(models?.openrouter ?? [])
+    .filter(m => enabledModels.includes(modelKey(m.provider, m.id)))
+
   const allModels: { provider: string; label: string; icon: React.ReactNode; color: string; models: AIModel[] }[] = [
     {
       provider: 'ollama',
@@ -228,6 +239,35 @@ export function SettingsPage() {
             ))}
           </div>
         )}
+
+        {/* Title Generation Model selector */}
+        <div className="pt-2 border-t border-gray-700">
+          <label className="text-xs text-gray-400 block mb-1.5">
+            Chat Title Generation Model
+          </label>
+          <p className="text-[10px] text-gray-500 mb-2">
+            This model generates a short, descriptive name for new chats after the first message.
+          </p>
+          <select
+            value={titleModel ?? ''}
+            onChange={e => setTitleModel(e.target.value || null)}
+            disabled={settingsLoading || saveMutation.isPending}
+            className="w-full px-2.5 py-1.5 text-xs bg-gray-800 border border-gray-700 rounded-md text-gray-200 focus:outline-none focus:border-sky-500 disabled:opacity-50"
+          >
+            <option value="">Auto (default chat model)</option>
+            {flatEnabledModels.map(m => {
+              const key = modelKey(m.provider, m.id)
+              return (
+                <option key={key} value={key}>
+                  [{m.provider}] {m.name}
+                </option>
+              )
+            })}
+            {flatEnabledModels.length === 0 && (
+              <option value="" disabled>No models enabled – enable models above first</option>
+            )}
+          </select>
+        </div>
       </section>
 
       {/* System Status */}

@@ -13,3 +13,6 @@ export const listMessages = (chatId: string) =>
 
 export const sendMessage = (chatId: string, content: string) =>
   api.post<{ role: string; content: string }>(`/chats/${chatId}/messages`, { content }).then(r => r.data)
+
+export const generateChatTitle = (chatId: string) =>
+  api.post<{ id: string; title: string }>(`/chats/${chatId}/generate-title`).then(r => r.data)

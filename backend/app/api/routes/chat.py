@@ -217,3 +217,79 @@ async def update_chat_title(
         raise HTTPException(status_code=404, detail="Chat not found")
     chat.title = payload.get("title", chat.title)
     return {"id": str(chat.id), "title": chat.title}
+
+
+@router.post("/{chat_id}/generate-title")
+async def generate_chat_title(
+    chat_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Auto-generate a title for the chat using AI based on the conversation."""
+    result = await db.execute(
+        select(Chat).where(Chat.id == chat_id, Chat.user_id == current_user.id)
+    )
+    chat = result.scalar_one_or_none()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    # Load first few messages for context
+    result = await db.execute(
+        select(Message).where(Message.chat_id == chat_id).order_by(Message.created_at).limit(4)
+    )
+    msgs = result.scalars().all()
+
+    if not msgs:
+        raise HTTPException(status_code=400, detail="No messages in chat")
+
+    # Build conversation snippet
+    conversation = "\n".join(
+        f"{msg.role.value}: {msg.content[:200]}" for msg in msgs
+    )
+
+    # Determine which model to use for title generation
+    user_settings = current_user.settings or {}
+    title_model_key = user_settings.get("title_generation_model")
+    if title_model_key:
+        colon_idx = title_model_key.find(":")
+        title_provider = title_model_key[:colon_idx]
+        title_model_name = title_model_key[colon_idx + 1:]
+    else:
+        title_provider = chat.model_provider
+        title_model_name = chat.model_name or ("llama3:8b" if title_provider == "ollama" else "anthropic/claude-3-haiku")
+
+    # Generate title via AI
+    try:
+        title_prompt = f"""Generate a very short, concise title (max 6 words) for this conversation.
+Respond with ONLY the title, no quotes, no explanation.
+
+Conversation:
+{conversation}
+
+Title:"""
+
+        response = await ai_service.chat(
+            provider=title_provider,
+            model=title_model_name,
+            messages=[AIMessage("user", title_prompt)],
+        )
+
+        # Parse title from response
+        if title_provider == "ollama":
+            title = response.get("message", {}).get("content", "").strip()
+        else:
+            title = response["choices"][0].get("message", {}).get("content", "").strip()
+
+        # Clean up: remove quotes, limit length
+        title = title.strip('"\'').strip()
+        if len(title) > 80:
+            title = title[:77] + "..."
+
+        chat.title = title or "New Chat"
+        await db.flush()
+
+        return {"id": str(chat.id), "title": chat.title}
+
+    except Exception as e:
+        logger.error(f"Title generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Title generation failed: {str(e)}")
