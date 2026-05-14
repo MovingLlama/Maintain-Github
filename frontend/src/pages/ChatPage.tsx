@@ -110,11 +110,11 @@ export function ChatPage() {
   })
 
   const sendMutation = useMutation({
-    mutationFn: (content: string) => sendMessage(activeChatId!, content),
-    onMutate: async (content) => {
+    mutationFn: ({ chatId, content }: { chatId: string; content: string }) => sendMessage(chatId, content),
+    onMutate: async ({ chatId, content }) => {
       const tempMsg: Message = {
         id: 'temp-user',
-        chat_id: activeChatId!,
+        chat_id: chatId,
         role: 'user',
         content,
         tool_calls: null,
@@ -123,11 +123,12 @@ export function ChatPage() {
         created_at: new Date().toISOString(),
       }
       setLocalMessages(prev => [...prev, tempMsg])
+      return { chatId }
     },
-    onSuccess: (response) => {
+    onSuccess: (response, { chatId }) => {
       const assistantMsg: Message = {
         id: 'temp-assistant-' + Date.now(),
-        chat_id: activeChatId!,
+        chat_id: chatId,
         role: 'assistant',
         content: response.content,
         tool_calls: null,
@@ -136,16 +137,15 @@ export function ChatPage() {
         created_at: new Date().toISOString(),
       }
       setLocalMessages(prev => prev.filter(m => m.id !== 'temp-user').concat(assistantMsg))
-      qc.invalidateQueries({ queryKey: ['messages', activeChatId] })
+      qc.invalidateQueries({ queryKey: ['messages', chatId] })
 
       // Auto-generate title after first message exchange
-      const chatId = activeChatId!
       if (!titleGeneratedRef.current.has(chatId)) {
         titleGeneratedRef.current.add(chatId)
         generateChatTitle(chatId).then(() => {
           qc.invalidateQueries({ queryKey: ['chats'] })
-        }).catch(() => {
-          // Silently ignore – title generation is best-effort
+        }).catch((err) => {
+          console.error('Title generation failed:', err)
         })
       }
     },
@@ -269,7 +269,7 @@ export function ChatPage() {
             </div>
             <div className="p-4 border-t border-gray-800">
               <ChatInput
-                onSend={content => sendMutation.mutate(content)}
+                onSend={content => sendMutation.mutate({ chatId: activeChatId!, content })}
                 isLoading={sendMutation.isPending}
               />
             </div>

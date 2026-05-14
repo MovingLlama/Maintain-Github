@@ -14,7 +14,7 @@ from app.models.chat import Chat, Message, MessageRole
 from app.models.repository import Repository, RepoStatus
 from app.schemas.chat import ChatCreate, ChatResponse, MessageCreate, MessageResponse
 from app.services.ai.agent_runner import AgentRunner
-from app.services.ai.ai_service import AIService
+from app.services.ai.ai_service import AIService, AIMessage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chats", tags=["Chats"])

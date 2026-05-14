@@ -17,11 +17,12 @@ export function RepositoriesPage() {
   const { selectedRepo, selectedFile, fileContent, isDirty, setSelectedRepo, setSelectedFile, setFileContent, setDirty } = useRepoStore()
   const qc = useQueryClient()
 
-  const { data: localRepos = [], isLoading } = useQuery({ queryKey: ['repos'], queryFn: listLocalRepos })
-  const { data: githubRepos = [], isLoading: ghLoading } = useQuery({
+  const { data: localRepos = [], isLoading, isError: localError, error: localErrObj } = useQuery({ queryKey: ['repos'], queryFn: listLocalRepos })
+  const { data: githubRepos = [], isLoading: ghLoading, isError: ghError, error: ghErrObj } = useQuery({
     queryKey: ['github-repos'],
     queryFn: () => listGithubRepos(),
     enabled: showGithub,
+    retry: 1,
   })
   const { data: filesData } = useQuery({
     queryKey: ['repo-files', selectedRepo?.id],
@@ -85,6 +86,14 @@ export function RepositoriesPage() {
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {isLoading ? (
             <p className="text-xs text-gray-500 text-center py-4">Loading...</p>
+          ) : localError ? (
+            <div className="text-center py-8 space-y-3">
+              <p className="text-xs text-red-400">Failed to load repositories</p>
+              <p className="text-xs text-gray-500">{(localErrObj as Error)?.message}</p>
+              <Button size="sm" variant="ghost" onClick={() => qc.invalidateQueries({ queryKey: ['repos'] })}>
+                <RefreshCw className="w-3.5 h-3.5" /> Retry
+              </Button>
+            </div>
           ) : !Array.isArray(localRepos) || localRepos.length === 0 ? (
             <div className="text-center py-8 space-y-3">
               <GitBranch className="w-8 h-8 text-gray-600 mx-auto" />
@@ -178,22 +187,36 @@ export function RepositoriesPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {ghLoading ? <p className="text-gray-400 text-sm text-center py-4">Loading...</p> : (Array.isArray(githubRepos) ? githubRepos : []).map(repo => (
-                <div key={repo.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-white truncate">{repo.full_name}</p>
-                    {repo.description && <p className="text-xs text-gray-400 truncate">{repo.description}</p>}
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => cloneMutation.mutate(repo)}
-                    isLoading={cloneMutation.isPending}
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Clone
+              {ghLoading ? (
+                <p className="text-gray-400 text-sm text-center py-4">Loading...</p>
+              ) : ghError ? (
+                <div className="text-center py-8 space-y-3">
+                  <p className="text-sm text-red-400">Failed to load GitHub repositories</p>
+                  <p className="text-xs text-gray-500">{(ghErrObj as Error)?.message || 'Check your network connection and GitHub token'}</p>
+                  <Button size="sm" variant="ghost" onClick={() => qc.invalidateQueries({ queryKey: ['github-repos'] })}>
+                    <RefreshCw className="w-3.5 h-3.5" /> Retry
                   </Button>
                 </div>
-              ))}
+              ) : (Array.isArray(githubRepos) ? githubRepos : []).length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-4">No GitHub repositories found</p>
+              ) : (
+                (Array.isArray(githubRepos) ? githubRepos : []).map(repo => (
+                  <div key={repo.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-white truncate">{repo.full_name}</p>
+                      {repo.description && <p className="text-xs text-gray-400 truncate">{repo.description}</p>}
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => cloneMutation.mutate(repo)}
+                      isLoading={cloneMutation.isPending}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Clone
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
