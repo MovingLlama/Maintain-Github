@@ -40,10 +40,13 @@ USER appuser
 
 EXPOSE 8000
 
-# Debug mode: attach debugpy on port 5678 with reload
-# Normal mode: standard uvicorn
-CMD if [ "$DEBUG" = "true" ]; then \
-        python -m debugpy --listen 0.0.0.0:5678 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload; \
+# Debug mode (only if debugpy is installed AND DEBUG=true):
+#   attach debugpy on port 5678 with hot-reload
+# Production mode (default):
+#   standard uvicorn
+CMD if [ "$DEBUG" = "true" ] && python -c "import debugpy" 2>/dev/null; then \
+        echo "Starting with debugpy on port 5678 (hot-reload enabled)"; \
+        exec python -m debugpy --listen 0.0.0.0:5678 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload; \
     else \
-        uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1; \
+        exec uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1; \
     fi
