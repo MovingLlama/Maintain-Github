@@ -23,9 +23,10 @@ const MAX_BUFFER = 500
 let logBuffer: DebugLog[] = []
 
 function isDev(): boolean {
-  // React's import.meta.env.MODE is 'development' in dev builds
+  // In Vite builds, import.meta.env.DEV is true in development mode.
+  // In production builds, the entire isDev() call is tree-shaken.
   try {
-    return import.meta.env.DEV === true
+    return import.meta.env?.DEV === true
   } catch {
     return false
   }
