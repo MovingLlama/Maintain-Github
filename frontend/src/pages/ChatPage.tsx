@@ -246,6 +246,7 @@ export function ChatPage() {
               <MessageSquare className="w-8 h-8 text-gray-600 mx-auto mb-2" />
               <p className="text-xs text-gray-500">No chats yet</p>
             </div>
+          ) : (
             chats.map(chat => {
               const isEditing = editingChatId === chat.id
               return (
