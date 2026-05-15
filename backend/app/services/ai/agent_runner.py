@@ -74,7 +74,15 @@ class AgentRunner:
             
             if tool_calls and executor:
                 # Execute tool calls
-                logger.info(f"Agent executing {len(tool_calls)} tool call(s)")
+                tool_names = [
+                    tc.get("function", {}).get("name", "unknown")
+                    for tc in tool_calls
+                ]
+                logger.info(
+                    "Agent iteration %d/%d: executing %d tool(s) → %s",
+                    iteration + 1, self.MAX_ITERATIONS,
+                    len(tool_calls), tool_names,
+                )
                 messages.append(AIMessage("assistant", assistant_msg or "", tool_calls=tool_calls))
                 
                 # Execute each tool and add results
@@ -85,7 +93,10 @@ class AgentRunner:
                     except json.JSONDecodeError:
                         args = {}
                     
+                    logger.debug("Agent tool call: %s args=%s", tool_name, args)
                     result = await executor.execute(tool_name, args)
+                    result_preview = result[:200] + "..." if len(result) > 200 else result
+                    logger.debug("Agent tool result: %s → %s", tool_name, result_preview)
                     messages.append(AIMessage(
                         "tool",
                         result,
@@ -97,11 +108,16 @@ class AgentRunner:
             else:
                 # No tool calls → final response
                 final_response = assistant_msg or ""
+                logger.info(
+                    "Agent finished after %d iteration(s), response length=%d chars",
+                    iteration + 1, len(final_response),
+                )
                 if on_chunk:
                     on_chunk(final_response)
                 break
         else:
             final_response = "Agent reached maximum iterations. Please refine your request."
+            logger.warning("Agent hit MAX_ITERATIONS=%d limit", self.MAX_ITERATIONS)
         
         return final_response
 

@@ -72,23 +72,46 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Log all incoming requests."""
+    """Log all incoming requests with request ID, user, and timing."""
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         start = time.time()
         
-        # Get IP
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        ip = forwarded_for.split(",")[0].strip() if forwarded_for else (
-            request.client.host if request.client else "unknown"
-        )
+        # Get IP from request state (set by RequestIDMiddleware)
+        ip = getattr(request.state, "client_ip", None)
+        if not ip:
+            forwarded_for = request.headers.get("X-Forwarded-For")
+            ip = forwarded_for.split(",")[0].strip() if forwarded_for else (
+                request.client.host if request.client else "unknown"
+            )
         
         response = await call_next(request)
         
         duration_ms = (time.time() - start) * 1000
-        logger.info(
-            f"{ip} {request.method} {request.url.path} "
-            f"→ {response.status_code} ({duration_ms:.1f}ms)"
+        request_id = getattr(request.state, "request_id", "-")
+        user_id = getattr(request.state, "user_id", None)
+        
+        # Build structured log message
+        extra = {
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "duration_ms": round(duration_ms, 1),
+            "client_ip": ip,
+            "user_id": user_id or "-",
+        }
+        
+        log_msg = (
+            f"{request.method} {request.url.path}"
+            f" → {response.status_code}"
         )
+        
+        # Use appropriate log level based on status code
+        if response.status_code >= 500:
+            logger.error(log_msg, extra=extra)
+        elif response.status_code >= 400:
+            logger.warning(log_msg, extra=extra)
+        else:
+            logger.info(log_msg, extra=extra)
         
         return response

@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     app_secret_key: str = "change-me"
     debug: bool = False
     
+    # Logging
+    log_level: str = "INFO"
+    log_format: str = "console"  # "console" or "json"
+    
     # Domain
     domain: str = "localhost"
     allowed_origins: str = "http://localhost:5173"
@@ -45,6 +49,9 @@ class Settings(BaseSettings):
     
     # Rate limiting
     rate_limit_per_minute: int = 60
+
+    # Metrics
+    metrics_enabled: bool = True
 
     @computed_field
     @property

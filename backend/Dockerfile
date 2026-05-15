@@ -1,5 +1,7 @@
 FROM python:3.12-slim AS base
 
+ARG DEBUG=false
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -19,6 +21,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Install debugpy for remote debugging in development
+RUN if [ "$DEBUG" = "true" ]; then \
+        pip install --no-cache-dir debugpy>=1.8.0 && \
+        echo "debugpy installed for remote debugging"; \
+    fi
+
 # Copy application code
 COPY . .
 
@@ -32,4 +40,10 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Debug mode: attach debugpy on port 5678 with reload
+# Normal mode: standard uvicorn
+CMD if [ "$DEBUG" = "true" ]; then \
+        python -m debugpy --listen 0.0.0.0:5678 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload; \
+    else \
+        uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1; \
+    fi

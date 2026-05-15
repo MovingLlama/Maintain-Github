@@ -220,12 +220,48 @@ class AIService:
         stream: bool = False,
     ) -> dict:
         """Unified chat interface."""
-        if provider == "ollama":
-            return await self.chat_ollama(model, messages, tools, stream)
-        elif provider == "openrouter":
-            return await self.chat_openrouter(model, messages, tools, stream)
-        else:
-            raise ValueError(f"Unknown provider: {provider}")
+        import time
+        from app.core.debug import debug
+
+        start = time.time()
+        msg_count = len(messages)
+        tool_count = len(tools) if tools else 0
+        total_chars = sum(len(m.content) for m in messages)
+
+        debug.log_http_request(
+            "CHAT",
+            f"{provider}/{model}",
+            headers={"provider": provider},
+            body={
+                "messages": msg_count,
+                "tools": tool_count,
+                "total_chars": total_chars,
+                "stream": stream,
+            },
+        )
+
+        try:
+            if provider == "ollama":
+                result = await self.chat_ollama(model, messages, tools, stream)
+            elif provider == "openrouter":
+                result = await self.chat_openrouter(model, messages, tools, stream)
+            else:
+                raise ValueError(f"Unknown provider: {provider}")
+
+            duration_ms = (time.time() - start) * 1000
+            debug.log_http_response(200, duration_ms, body={"provider": provider, "model": model})
+            logger.debug(
+                "AI chat: provider=%s model=%s messages=%d tools=%d duration=%.0fms",
+                provider, model, msg_count, tool_count, duration_ms,
+            )
+            return result
+        except Exception as e:
+            duration_ms = (time.time() - start) * 1000
+            logger.error(
+                "AI chat failed: provider=%s model=%s error=%s duration=%.0fms",
+                provider, model, str(e), duration_ms,
+            )
+            raise
 
     async def stream(
         self,
@@ -235,11 +271,31 @@ class AIService:
         tools: Optional[list[dict]] = None,
     ) -> AsyncIterator[str]:
         """Unified streaming interface."""
-        if provider == "ollama":
-            async for chunk in self.stream_ollama(model, messages, tools):
-                yield chunk
-        elif provider == "openrouter":
-            async for chunk in self.stream_openrouter(model, messages, tools):
-                yield chunk
-        else:
-            raise ValueError(f"Unknown provider: {provider}")
+        import time
+        start = time.time()
+        chunk_count = 0
+
+        try:
+            if provider == "ollama":
+                async for chunk in self.stream_ollama(model, messages, tools):
+                    chunk_count += 1
+                    yield chunk
+            elif provider == "openrouter":
+                async for chunk in self.stream_openrouter(model, messages, tools):
+                    chunk_count += 1
+                    yield chunk
+            else:
+                raise ValueError(f"Unknown provider: {provider}")
+
+            duration_ms = (time.time() - start) * 1000
+            logger.debug(
+                "AI stream complete: provider=%s model=%s chunks=%d duration=%.0fms",
+                provider, model, chunk_count, duration_ms,
+            )
+        except Exception as e:
+            duration_ms = (time.time() - start) * 1000
+            logger.error(
+                "AI stream failed: provider=%s model=%s error=%s duration=%.0fms",
+                provider, model, str(e), duration_ms,
+            )
+            raise

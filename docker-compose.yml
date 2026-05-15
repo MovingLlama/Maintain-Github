@@ -84,6 +84,12 @@ services:
       REDIS_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://ollama:11434
       REPOS_STORAGE_PATH: /app/repos
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "maintain.service=backend"
     volumes:
       - maintain_repos:/app/repos
     depends_on:
@@ -115,6 +121,12 @@ services:
       REDIS_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://ollama:11434
       REPOS_STORAGE_PATH: /app/repos
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "maintain.service=worker"
     volumes:
       - maintain_repos:/app/repos
     depends_on:
@@ -129,6 +141,12 @@ services:
     image: ghcr.io/movingllama/maintain-github-frontend:${IMAGE_TAG:-latest}
     container_name: maintain_frontend
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "maintain.service=frontend"
     depends_on:
       - backend
     networks:

@@ -8,6 +8,8 @@ import { ChatPage } from './pages/ChatPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { useAuth } from './hooks/useAuth'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
+import { DebugProvider } from './components/common/DebugProvider'
+import { DebugPanel } from './components/common/DebugPanel'
 
 const queryClient = new QueryClient()
 
@@ -50,11 +52,14 @@ function AppRoutes() {
 export function App() {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </QueryClientProvider>
+      <DebugProvider>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </QueryClientProvider>
+        <DebugPanel />
+      </DebugProvider>
     </ErrorBoundary>
   )
 }

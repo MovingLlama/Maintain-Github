@@ -43,6 +43,12 @@ services:
     container_name: maintain_backend
     restart: unless-stopped
     env_file: .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "maintain.service=backend"
     environment:
       # Override REDIS_URL to use internal redis service
       REDIS_URL: redis://redis:6379/0
@@ -70,6 +76,12 @@ services:
     restart: unless-stopped
     command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4
     env_file: .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "maintain.service=worker"
     environment:
       REDIS_URL: redis://redis:6379/0
       REPOS_STORAGE_PATH: /app/repos
@@ -89,6 +101,12 @@ services:
     image: ghcr.io/movingllama/maintain-github-frontend:${IMAGE_TAG:-latest}
     container_name: maintain_frontend
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "maintain.service=frontend"
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     volumes:

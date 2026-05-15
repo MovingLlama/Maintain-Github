@@ -6,7 +6,11 @@
         minimal-logs minimal-restart minimal-build \
         minimal-shell-backend minimal-db-upgrade \
         dev-up dev-up-build dev-down dev-logs dev-restart dev-build \
-        dev-minimal-up dev-minimal-up-build dev-minimal-down
+        dev-minimal-up dev-minimal-up-build dev-minimal-down \
+        dev-debug dev-debug-build dev-debug-down \
+        dev-logs-backend dev-logs-worker dev-logs-traefik dev-logs-all \
+        db-query-log-on db-query-log-off \
+        metrics debug-attach db-shell
 
 # --- Production (GHCR Images) ---
 up:
@@ -129,3 +133,83 @@ help:
 	@echo ""
 	@echo "  make minimal-up      - Start minimal production stack"
 	@echo "  make dev-minimal-up  - Start minimal dev stack"
+	@echo ""
+	@echo "  Debug Commands:"
+	@echo "  make dev-debug          - Start dev services with debug mode & hot-reload"
+	@echo "  make dev-debug-build    - Build & start dev services with debug mode"
+	@echo "  make dev-debug-down     - Stop debug dev services"
+	@echo "  make dev-logs-backend   - Follow backend logs"
+	@echo "  make dev-logs-worker    - Follow worker logs"
+	@echo "  make dev-logs-traefik   - Follow Traefik logs"
+	@echo "  make dev-logs-all       - Follow all dev logs"
+	@echo "  make db-query-log-on    - Enable PostgreSQL query logging"
+	@echo "  make db-query-log-off   - Disable PostgreSQL query logging"
+	@echo "  make metrics            - Show Prometheus metrics snapshot"
+	@echo "  make debug-attach       - Show VS Code debug attach config"
+
+# --- Debug & Development ---
+dev-debug:
+	docker compose -f docker-compose.dev.yml up -d
+	@echo ""
+	@echo "============================================"
+	@echo "  Debug mode active!"
+	@echo "  Backend:  http://localhost:8000"
+	@echo "  Debugger: port 5678 (attach with VS Code F5)"
+	@echo "  Frontend: http://localhost:5173"
+	@echo "  Metrics:  http://localhost:8000/api/metrics"
+	@echo "  Logs:     make dev-logs-backend"
+	@echo "============================================"
+
+dev-debug-build:
+	docker compose -f docker-compose.dev.yml up -d --build
+	@echo ""
+	@echo "============================================"
+	@echo "  Debug mode active! (fresh build)"
+	@echo "  Debugger available on port 5678"
+	@echo "============================================"
+
+dev-debug-down:
+	docker compose -f docker-compose.dev.yml down
+
+dev-logs-backend:
+	docker compose -f docker-compose.dev.yml logs -f backend
+
+dev-logs-worker:
+	docker compose -f docker-compose.dev.yml logs -f worker
+
+dev-logs-traefik:
+	docker compose -f docker-compose.dev.yml logs -f traefik
+
+dev-logs-all:
+	docker compose -f docker-compose.dev.yml logs -f
+
+# --- Database Debugging ---
+db-query-log-on:
+	@echo "Enabling PostgreSQL query logging..."
+	docker compose -f docker-compose.dev.yml exec -T postgres psql -U $${POSTGRES_USER:-maintain} -d $${POSTGRES_DB:-maintain_github} -c "ALTER SYSTEM SET log_statement = 'all'; SELECT pg_reload_conf();" 2>/dev/null || echo "Run: make dev-up first"
+
+db-query-log-off:
+	@echo "Disabling PostgreSQL query logging..."
+	docker compose -f docker-compose.dev.yml exec -T postgres psql -U $${POSTGRES_USER:-maintain} -d $${POSTGRES_DB:-maintain_github} -c "ALTER SYSTEM SET log_statement = 'none'; SELECT pg_reload_conf();" 2>/dev/null || echo "Run: make dev-up first"
+
+# --- Metrics ---
+metrics:
+	@echo "=== Prometheus Metrics ==="
+	@curl -s http://localhost:8000/api/metrics 2>/dev/null | head -40 || echo "Backend not running. Start with: make dev-debug"
+
+# --- Debug Attach Helper ---
+debug-attach:
+	@echo ""
+	@echo "Add this to your VS Code .vscode/launch.json:"
+	@echo ""
+	@echo '{'
+	@echo '  "name": "Python: Remote Attach",'
+	@echo '  "type": "debugpy",'
+	@echo '  "request": "attach",'
+	@echo '  "connect": { "host": "localhost", "port": 5678 },'
+	@echo '  "pathMappings": [{ "localRoot": "$${workspaceFolder}/backend", "remoteRoot": "/app" }],'
+	@echo '  "justMyCode": false'
+	@echo '}'
+	@echo ""
+	@echo "Or use the pre-configured launch.json in .vscode/"
+	@echo "Then: F5 → 'Python: Remote Attach (Backend)'"

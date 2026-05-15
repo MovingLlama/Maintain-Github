@@ -86,8 +86,15 @@ services:
       REDIS_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://ollama:11434
       REPOS_STORAGE_PATH: /app/repos
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+      LOG_FORMAT: console
+    ports:
+      - "5678:5678"
     volumes:
       - maintain_repos:/app/repos
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,15 +119,19 @@ services:
       dockerfile: Dockerfile
     container_name: maintain_worker
     restart: unless-stopped
-    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.core.celery_app worker --loglevel=debug --concurrency=4
     env_file: .env
     environment:
       POSTGRES_HOST: postgres
       REDIS_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://ollama:11434
       REPOS_STORAGE_PATH: /app/repos
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+      LOG_FORMAT: console
     volumes:
       - maintain_repos:/app/repos
+      - ./backend:/app
     depends_on:
       postgres:
         condition: service_healthy

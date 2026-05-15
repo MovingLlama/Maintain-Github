@@ -9,6 +9,12 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Enable GitPython verbose logging in debug mode
+if settings.debug:
+    logging.getLogger("git").setLevel(logging.DEBUG)
+    os.environ.setdefault("GIT_PYTHON_TRACE", "full")
+    logger.debug("GitPython trace logging enabled (debug mode)")
+
 class GitService:
     def __init__(self, repos_base_path: Optional[str] = None):
         self.base_path = Path(repos_base_path or settings.repos_storage_path)

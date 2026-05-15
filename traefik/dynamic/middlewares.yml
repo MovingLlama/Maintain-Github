@@ -12,3 +12,10 @@ http:
         referrerPolicy: "strict-origin-when-cross-origin"
         permissionsPolicy: "camera=(), microphone=(), geolocation=()"
         customFrameOptionsValue: "SAMEORIGIN"
+
+    debug-headers:
+      headers:
+        customResponseHeaders:
+          X-Debug-Mode: "true"
+        customRequestHeaders:
+          X-Forwarded-By: "traefik"
