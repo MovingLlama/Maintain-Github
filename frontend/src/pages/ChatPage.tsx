@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listChats, createChat, deleteChat, listMessages, sendMessage, generateChatTitle } from '../api/chats'
+import { listChats, createChat, deleteChat, listMessages, sendMessage } from '../api/chats'
 import { listModels } from '../api/ai'
 import { getUserSettings } from '../api/settings'
 import { ChatMessage } from '../components/chat/ChatMessage'
@@ -20,7 +20,6 @@ export function ChatPage() {
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const titleGeneratedRef = useRef<Set<string>>(new Set())
   const qc = useQueryClient()
 
   const { data: chats = [] } = useQuery({ queryKey: ['chats'], queryFn: listChats })
@@ -138,22 +137,10 @@ export function ChatPage() {
       }
       setLocalMessages(prev => prev.filter(m => m.id !== 'temp-user').concat(assistantMsg))
       qc.invalidateQueries({ queryKey: ['messages', chatId] })
-
-      // Auto-generate title after first message exchange
-      if (!titleGeneratedRef.current.has(chatId)) {
-        titleGeneratedRef.current.add(chatId)
-        generateChatTitle(chatId).then(() => {
-          qc.invalidateQueries({ queryKey: ['chats'] })
-        }).catch((err) => {
-          console.error('Title generation failed:', err)
-        })
-      }
+      // Title is auto-generated server-side in the same transaction;
+      // invalidate chats so the sidebar picks up the new title
+      qc.invalidateQueries({ queryKey: ['chats'] })
     },
-  })
-
-  const titleMutation = useMutation({
-    mutationFn: generateChatTitle,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['chats'] }),
   })
 
   const selectedModel = enabledModels.find(m => modelKey(m.provider, m.id) === selectedModelKey)

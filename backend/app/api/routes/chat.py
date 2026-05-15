@@ -157,6 +157,7 @@ async def send_message(
                 model_used=chat.model_name,
             )
             db.add(assistant_msg)
+            await _maybe_generate_title(chat, current_user, db)
             await db.commit()
             yield f"data: {json.dumps({'done': True})}\n\n"
 
@@ -182,9 +183,83 @@ async def send_message(
             model_used=chat.model_name,
         )
         db.add(assistant_msg)
+
+        # Auto-generate title on first message exchange
+        await _maybe_generate_title(chat, current_user, db)
+
         await db.commit()
 
         return {"role": "assistant", "content": response_text}
+
+
+async def _maybe_generate_title(chat: Chat, current_user: User, db: AsyncSession):
+    """Generate a title for the chat if it's the first message exchange (only 2 messages: user + assistant)."""
+    if chat.title != "New Chat":
+        return  # Already has a custom title
+
+    # Count messages - only generate on first exchange
+    from sqlalchemy import func as sqlfunc
+    result = await db.execute(
+        select(sqlfunc.count(Message.id)).where(Message.chat_id == chat.id)
+    )
+    msg_count = result.scalar() or 0
+    if msg_count != 2:
+        return  # Not the first exchange
+
+    # Load the messages for context
+    result = await db.execute(
+        select(Message).where(Message.chat_id == chat.id).order_by(Message.created_at).limit(2)
+    )
+    msgs = result.scalars().all()
+    if len(msgs) < 2:
+        return
+
+    conversation = "\n".join(f"{msg.role.value}: {msg.content[:200]}" for msg in msgs)
+
+    # Determine which model to use
+    user_settings = current_user.settings or {}
+    title_model_key = user_settings.get("title_generation_model")
+    if title_model_key:
+        colon_idx = title_model_key.find(":")
+        if colon_idx > 0:
+            title_provider = title_model_key[:colon_idx]
+            title_model_name = title_model_key[colon_idx + 1:]
+        else:
+            return  # Invalid key format
+    else:
+        title_provider = chat.model_provider
+        title_model_name = chat.model_name or ("llama3:8b" if title_provider == "ollama" else "anthropic/claude-3-haiku")
+
+    try:
+        title_prompt = f"""Generate a very short, concise title (max 6 words) for this conversation.
+Respond with ONLY the title, no quotes, no explanation.
+
+Conversation:
+{conversation}
+
+Title:"""
+
+        response = await ai_service.chat(
+            provider=title_provider,
+            model=title_model_name,
+            messages=[AIMessage("user", title_prompt)],
+        )
+
+        if title_provider == "ollama":
+            title = response.get("message", {}).get("content", "").strip()
+        else:
+            title = response["choices"][0].get("message", {}).get("content", "").strip()
+
+        title = title.strip('"\'').strip()
+        if title and len(title) > 80:
+            title = title[:77] + "..."
+
+        if title:
+            chat.title = title
+            logger.info(f"Auto-generated title for chat {chat.id}: {title}")
+
+    except Exception as e:
+        logger.warning(f"Title generation failed (non-fatal): {e}")
 
 
 @router.delete("/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
