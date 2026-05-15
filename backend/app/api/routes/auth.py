@@ -66,7 +66,14 @@ async def github_callback(
     )
     
     # Redirect to frontend
-    frontend_url = f"https://{settings.domain}" if not settings.debug else "http://localhost:5173"
+    # When running locally (domain=localhost) in debug mode, use Vite dev server.
+    # Otherwise use the configured domain with https.
+    if settings.debug and settings.domain == "localhost":
+        frontend_url = "http://localhost:5173"
+    elif settings.domain == "localhost":
+        frontend_url = "http://localhost:3000"
+    else:
+        frontend_url = f"https://{settings.domain}"
     redirect = RedirectResponse(url=f"{frontend_url}/auth/success", status_code=302)
     
     # Set cookies directly on the RedirectResponse

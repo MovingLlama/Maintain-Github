@@ -42,7 +42,7 @@ class GitService:
         
         auth_url = self._get_auth_url(github_token, repo_full_name)
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             lambda: Repo.clone_from(
@@ -65,7 +65,7 @@ class GitService:
         repo_path = self._get_repo_path(user_id, repo_full_name)
         auth_url = self._get_auth_url(github_token, repo_full_name)
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         def _pull():
             repo = Repo(str(repo_path))
             with repo.remotes.origin.config_writer as cw:
@@ -94,7 +94,7 @@ class GitService:
                 })
             return result
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _walk)
 
     async def read_file(self, user_id: str, repo_full_name: str, file_path: str) -> str:
@@ -104,7 +104,7 @@ class GitService:
         if not str(full_path).startswith(str(repo_path.resolve())):
             raise PermissionError("Path traversal attempt detected")
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: full_path.read_text(encoding="utf-8", errors="replace"),
@@ -120,7 +120,7 @@ class GitService:
             full_path.parent.mkdir(parents=True, exist_ok=True)
             full_path.write_text(content, encoding="utf-8")
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _write)
 
     async def commit_and_push(
@@ -152,12 +152,12 @@ class GitService:
             logger.info(f"Pushed commit {commit.hexsha} to {repo_full_name}")
             return commit.hexsha
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _commit_push)
 
     async def get_diff(self, user_id: str, repo_full_name: str) -> str:
         repo_path = self._get_repo_path(user_id, repo_full_name)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: Repo(str(repo_path)).git.diff())
 
     async def get_log(self, user_id: str, repo_full_name: str, max_count: int = 20) -> list[dict]:
@@ -173,12 +173,12 @@ class GitService:
                     "date": commit.authored_datetime.isoformat(),
                 })
             return commits
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _log)
 
     async def list_branches(self, user_id: str, repo_full_name: str) -> list[str]:
         repo_path = self._get_repo_path(user_id, repo_full_name)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
             lambda: [b.name for b in Repo(str(repo_path)).branches],
@@ -192,5 +192,5 @@ class GitService:
                 repo.git.checkout("-b", branch)
             else:
                 repo.git.checkout(branch)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _checkout)

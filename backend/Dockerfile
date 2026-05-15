@@ -36,6 +36,9 @@ RUN mkdir -p /app/repos && chown -R appuser:appuser /app
 # Configure git safe directory
 RUN git config --global --add safe.directory '*'
 
+# Use entrypoint for startup checks and permission fixes
+ENTRYPOINT ["/app/entrypoint.sh"]
+
 USER appuser
 
 EXPOSE 8000

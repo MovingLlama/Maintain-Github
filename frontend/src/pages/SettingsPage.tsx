@@ -1,9 +1,9 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listModels, pullOllamaModel } from '../api/ai'
 import { getUserSettings, updateUserSettings } from '../api/settings'
 import { useAuthStore } from '../stores/authStore'
-import { Github, Cpu, Cloud, Shield, Star, ToggleLeft, ToggleRight, Download, Loader2 } from 'lucide-react'
+import { Github, Cpu, Cloud, Shield, Star, ToggleLeft, ToggleRight, Download, Loader2, ExternalLink, ChevronRight, ChevronDown, Search } from 'lucide-react'
 import { AIModel } from '../types'
 
 /** Derive composite key from provider + model id */
@@ -11,11 +11,33 @@ function modelKey(provider: string, modelId: string) {
   return `${provider}:${modelId}`
 }
 
+/** Group models by their family name */
+function groupModels(models: AIModel[], provider: string): Map<string, AIModel[]> {
+  const groups = new Map<string, AIModel[]>()
+  for (const m of models) {
+    let family: string
+    if (provider === 'ollama') {
+      // ollama: "llama3:8b" → family "llama3"
+      const colonIdx = m.id.indexOf(':')
+      family = colonIdx > 0 ? m.id.substring(0, colonIdx) : m.id
+    } else {
+      // openrouter: "meta-llama/llama-3-70b" → family "meta-llama"
+      const slashIdx = m.id.indexOf('/')
+      family = slashIdx > 0 ? m.id.substring(0, slashIdx) : m.id
+    }
+    if (!groups.has(family)) groups.set(family, [])
+    groups.get(family)!.push(m)
+  }
+  return groups
+}
+
 export function SettingsPage() {
   const { user } = useAuthStore()
   const qc = useQueryClient()
   const [pullModelName, setPullModelName] = useState('')
   const [pullMessage, setPullMessage] = useState<string | null>(null)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [openRouterSearch, setOpenRouterSearch] = useState('')
   const pullInputRef = useRef<HTMLInputElement>(null)
 
   const { data: models } = useQuery({ queryKey: ['models'], queryFn: listModels })
@@ -89,22 +111,32 @@ export function SettingsPage() {
     .concat(models?.openrouter ?? [])
     .filter(m => enabledModels.includes(modelKey(m.provider, m.id)))
 
-  const allModels: { provider: string; label: string; icon: React.ReactNode; color: string; models: AIModel[] }[] = [
-    {
-      provider: 'ollama',
-      label: 'Ollama (Local)',
-      icon: <Cloud className="w-3 h-3" />,
-      color: 'text-sky-400',
-      models: models?.ollama ?? [],
-    },
-    {
-      provider: 'openrouter',
-      label: 'OpenRouter (Cloud)',
-      icon: <Shield className="w-3 h-3" />,
-      color: 'text-purple-400',
-      models: models?.openrouter ?? [],
-    },
-  ]
+  const toggleGroup = (family: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(family)) next.delete(family)
+      else next.add(family)
+      return next
+    })
+  }
+
+  const ollamaModels = models?.ollama ?? []
+  const openRouterModels = models?.openrouter ?? []
+  const ollamaGroups = useMemo(() => groupModels(ollamaModels, 'ollama'), [ollamaModels])
+  const openRouterGroups = useMemo(() => {
+    const groups = groupModels(openRouterModels, 'openrouter')
+    if (!openRouterSearch.trim()) return groups
+    // Filter groups by search query
+    const filtered = new Map<string, AIModel[]>()
+    const q = openRouterSearch.toLowerCase()
+    for (const [family, familyModels] of groups) {
+      const matching = familyModels.filter(
+        m => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
+      )
+      if (matching.length > 0) filtered.set(family, matching)
+    }
+    return filtered
+  }, [openRouterModels, openRouterSearch])
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6 max-w-2xl mx-auto">
@@ -143,100 +175,231 @@ export function SettingsPage() {
           <div className="text-xs text-gray-500 italic py-4">Loading settings…</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {allModels.map(({ provider, label, icon, color, models: providerModels }) => (
-              <div key={provider} className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 space-y-3">
-                <div className={`flex items-center gap-2 text-xs font-medium ${color}`}>
-                  {icon}
-                  {label}
-                </div>
-                <div className="space-y-1">
-                  {providerModels.map(model => {
-                    const enabled = isEnabled(provider, model.id)
-                    const isDefault = defaultModel === modelKey(provider, model.id)
+            {/* --- Ollama Column --- */}
+            <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-sky-400">
+                <Cloud className="w-3 h-3" />
+                Ollama (Local)
+              </div>
+
+              {ollamaGroups.size === 0 ? (
+                <p className="text-xs text-gray-500 italic py-2">No models found</p>
+              ) : (
+                <div className="space-y-2">
+                  {Array.from(ollamaGroups.entries()).map(([family, familyModels]) => {
+                    const isExpanded = expandedGroups.has(family) || ollamaGroups.size === 1
                     return (
-                      <div
-                        key={model.id}
-                        className="flex items-center justify-between py-1.5 border-b border-gray-700 last:border-0 group"
-                      >
-                        <div className="flex-1 min-w-0 flex items-center gap-2">
-                          <button
-                            onClick={() => toggleModel(provider, model.id)}
-                            disabled={saveMutation.isPending}
-                            className="flex-shrink-0 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
-                            title={enabled ? 'Disable model' : 'Enable model'}
-                          >
-                            {enabled ? (
-                              <ToggleRight className="w-5 h-5 text-sky-400" />
+                      <div key={family} className="border border-gray-700/50 rounded-lg overflow-hidden">
+                        <button
+                          onClick={() => toggleGroup(family)}
+                          className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-700/50 transition-colors"
+                        >
+                          <span className="text-xs font-medium text-gray-300">{family}</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-gray-600">{familyModels.length}</span>
+                            {isExpanded ? (
+                              <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
                             ) : (
-                              <ToggleLeft className="w-5 h-5" />
+                              <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
                             )}
-                          </button>
-                          <span className={`text-xs truncate ${enabled ? 'text-gray-200' : 'text-gray-500'}`}>
-                            {model.name}
                           </span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-xs text-gray-600">
-                            {model.size ? `${(model.size / 1e9).toFixed(1)}GB` : model.context_length ? `${(model.context_length / 1000).toFixed(0)}k` : ''}
-                          </span>
-                          {enabled && (
-                            <button
-                              onClick={() => setDefaultModel(provider, model.id)}
-                              disabled={saveMutation.isPending}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                              title={isDefault ? 'Default model' : 'Set as default'}
-                            >
-                              <Star
-                                className={`w-3.5 h-3.5 ${
-                                  isDefault ? 'text-yellow-400 fill-yellow-400' : 'text-gray-500 hover:text-yellow-400'
-                                }`}
-                              />
-                            </button>
-                          )}
-                        </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="border-t border-gray-700/50">
+                            {familyModels.map(model => {
+                              const enabled = isEnabled('ollama', model.id)
+                              const isDefault = defaultModel === modelKey('ollama', model.id)
+                              return (
+                                <div
+                                  key={model.id}
+                                  className="flex items-center justify-between px-3 py-1.5 hover:bg-gray-700/30 group"
+                                >
+                                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                                    <button
+                                      onClick={() => toggleModel('ollama', model.id)}
+                                      disabled={saveMutation.isPending}
+                                      className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"
+                                    >
+                                      {enabled ? (
+                                        <ToggleRight className="w-4 h-4 text-sky-400" />
+                                      ) : (
+                                        <ToggleLeft className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                    <span className={`text-xs truncate ${enabled ? 'text-gray-200' : 'text-gray-500'}`}>
+                                      {model.name}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    <span className="text-[10px] text-gray-600">
+                                      {model.size ? `${(model.size / 1e9).toFixed(1)}GB` : ''}
+                                    </span>
+                                    {enabled && (
+                                      <button
+                                        onClick={() => setDefaultModel('ollama', model.id)}
+                                        disabled={saveMutation.isPending}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                      >
+                                        <Star
+                                          className={`w-3 h-3 ${
+                                            isDefault ? 'text-yellow-400 fill-yellow-400' : 'text-gray-500 hover:text-yellow-400'
+                                          }`}
+                                        />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
-                  {providerModels.length === 0 && (
-                    <p className="text-xs text-gray-500 italic py-2">No models found</p>
-                  )}
                 </div>
-                {/* Pull new model section – only for Ollama */}
-                {provider === 'ollama' && (
-                  <div className="pt-2 border-t border-gray-700 space-y-1.5">
-                    <p className="text-[10px] text-gray-500 uppercase font-semibold">Pull new model</p>
-                    <div className="flex gap-1.5">
-                      <input
-                        ref={pullInputRef}
-                        type="text"
-                        value={pullModelName}
-                        onChange={e => setPullModelName(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && pullModelName.trim() && pullMutation.mutate(pullModelName.trim())}
-                        placeholder="e.g. llama3:8b"
-                        className="flex-1 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded-md text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-                      />
-                      <button
-                        onClick={() => pullModelName.trim() && pullMutation.mutate(pullModelName.trim())}
-                        disabled={pullMutation.isPending || !pullModelName.trim()}
-                        className="px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-md flex items-center gap-1 transition-colors"
-                      >
-                        {pullMutation.isPending ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Download className="w-3 h-3" />
-                        )}
-                        Pull
-                      </button>
-                    </div>
-                    {pullMessage && (
-                      <p className={`text-[11px] ${pullMessage.startsWith('Pull failed') ? 'text-red-400' : 'text-green-400'}`}>
-                        {pullMessage}
-                      </p>
+              )}
+
+              {/* Pull new model section */}
+              <div className="pt-2 border-t border-gray-700 space-y-1.5">
+                <p className="text-[10px] text-gray-500 uppercase font-semibold">Pull new model</p>
+                <div className="flex gap-1.5">
+                  <input
+                    ref={pullInputRef}
+                    type="text"
+                    value={pullModelName}
+                    onChange={e => setPullModelName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && pullModelName.trim() && pullMutation.mutate(pullModelName.trim())}
+                    placeholder="e.g. llama3:8b"
+                    className="flex-1 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded-md text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                  />
+                  <button
+                    onClick={() => pullModelName.trim() && pullMutation.mutate(pullModelName.trim())}
+                    disabled={pullMutation.isPending || !pullModelName.trim()}
+                    className="px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-md flex items-center gap-1 transition-colors"
+                  >
+                    {pullMutation.isPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Download className="w-3 h-3" />
                     )}
-                  </div>
+                    Pull
+                  </button>
+                </div>
+                {pullMessage && (
+                  <p className={`text-[11px] ${pullMessage.startsWith('Pull failed') ? 'text-red-400' : 'text-green-400'}`}>
+                    {pullMessage}
+                  </p>
                 )}
+                <a
+                  href="https://ollama.com/library"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[10px] text-sky-400 hover:text-sky-300 transition-colors mt-1.5"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Browse available models on ollama.com
+                </a>
               </div>
-            ))}
+            </div>
+
+            {/* --- OpenRouter Column --- */}
+            <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-purple-400">
+                <Shield className="w-3 h-3" />
+                OpenRouter (Cloud)
+              </div>
+
+              {/* Search field */}
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
+                <input
+                  type="text"
+                  value={openRouterSearch}
+                  onChange={e => setOpenRouterSearch(e.target.value)}
+                  placeholder="Search models..."
+                  className="w-full pl-6 pr-2 py-1.5 text-xs bg-gray-900 border border-gray-700 rounded-md text-gray-200 placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              {openRouterGroups.size === 0 ? (
+                <p className="text-xs text-gray-500 italic py-2">
+                  {openRouterSearch ? 'No matching models' : 'No models found'}
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {Array.from(openRouterGroups.entries()).map(([family, familyModels]) => {
+                    const isExpanded = expandedGroups.has(family) || openRouterGroups.size === 1 || !!openRouterSearch
+                    return (
+                      <div key={family} className="border border-gray-700/50 rounded-lg overflow-hidden">
+                        <button
+                          onClick={() => toggleGroup(family)}
+                          className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-700/50 transition-colors"
+                        >
+                          <span className="text-xs font-medium text-gray-300 truncate">{family}</span>
+                          <span className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="text-[10px] text-gray-600">{familyModels.length}</span>
+                            {isExpanded ? (
+                              <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                            ) : (
+                              <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
+                            )}
+                          </span>
+                        </button>
+                        {isExpanded && (
+                          <div className="border-t border-gray-700/50">
+                            {familyModels.map(model => {
+                              const enabled = isEnabled('openrouter', model.id)
+                              const isDefault = defaultModel === modelKey('openrouter', model.id)
+                              return (
+                                <div
+                                  key={model.id}
+                                  className="flex items-center justify-between px-3 py-1.5 hover:bg-gray-700/30 group"
+                                >
+                                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                                    <button
+                                      onClick={() => toggleModel('openrouter', model.id)}
+                                      disabled={saveMutation.isPending}
+                                      className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"
+                                    >
+                                      {enabled ? (
+                                        <ToggleRight className="w-4 h-4 text-sky-400" />
+                                      ) : (
+                                        <ToggleLeft className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                    <span className={`text-xs truncate ${enabled ? 'text-gray-200' : 'text-gray-500'}`}>
+                                      {model.name}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    <span className="text-[10px] text-gray-600">
+                                      {model.context_length ? `${(model.context_length / 1000).toFixed(0)}k` : ''}
+                                    </span>
+                                    {enabled && (
+                                      <button
+                                        onClick={() => setDefaultModel('openrouter', model.id)}
+                                        disabled={saveMutation.isPending}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                      >
+                                        <Star
+                                          className={`w-3 h-3 ${
+                                            isDefault ? 'text-yellow-400 fill-yellow-400' : 'text-gray-500 hover:text-yellow-400'
+                                          }`}
+                                        />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

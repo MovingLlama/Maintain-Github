@@ -1,5 +1,6 @@
 import logging
 import json
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -277,10 +278,14 @@ async def delete_chat(
     await db.delete(chat)
 
 
+class ChatUpdatePayload(BaseModel):
+    title: Optional[str] = None
+    system_prompt: Optional[str] = None
+
 @router.patch("/{chat_id}/title")
 async def update_chat_title(
     chat_id: UUID,
-    payload: dict,
+    payload: ChatUpdatePayload,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -290,8 +295,11 @@ async def update_chat_title(
     chat = result.scalar_one_or_none()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
-    chat.title = payload.get("title", chat.title)
-    return {"id": str(chat.id), "title": chat.title}
+    if payload.title is not None:
+        chat.title = payload.title
+    if payload.system_prompt is not None:
+        chat.system_prompt = payload.system_prompt
+    return {"id": str(chat.id), "title": chat.title, "system_prompt": chat.system_prompt}
 
 
 @router.post("/{chat_id}/generate-title")

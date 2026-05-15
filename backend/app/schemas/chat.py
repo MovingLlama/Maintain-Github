@@ -19,6 +19,7 @@ class ChatResponse(BaseModel):
     title: str
     model_provider: str
     model_name: Optional[str] = None
+    system_prompt: Optional[str] = None
     is_agent_mode: bool
     created_at: datetime
     updated_at: datetime

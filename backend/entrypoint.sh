@@ -43,6 +43,10 @@ except Exception as e:
     sleep 2
 done
 
+# Ensure repos directory is writable by appuser
+echo "Fixing permissions for /app/repos..."
+chown -R appuser:appuser /app/repos 2>/dev/null || true
+
 # Run Alembic migrations
 echo "Running database migrations..."
 alembic upgrade head

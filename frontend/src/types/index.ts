@@ -48,6 +48,7 @@ export interface Chat {
   title: string
   model_provider: 'ollama' | 'openrouter'
   model_name: string | null
+  system_prompt: string | null
   is_agent_mode: boolean
   created_at: string
   updated_at: string

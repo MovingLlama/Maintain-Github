@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage'
 import { AuthSuccessPage } from './pages/AuthSuccessPage'
 import { RepositoriesPage } from './pages/RepositoriesPage'
 import { ChatPage } from './pages/ChatPage'
+import { AgentPage } from './pages/AgentPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { useAuth } from './hooks/useAuth'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
@@ -39,7 +40,7 @@ function AppRoutes() {
       <Route element={<AppLayout />}>
         <Route path="/repos" element={<RepositoriesPage />} />
         <Route path="/chat" element={<ChatPage />} />
-        <Route path="/agent" element={<div className="p-6 text-white">Agent Mode coming soon...</div>} />
+        <Route path="/agent" element={<AgentPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/" element={<Navigate to="/repos" replace />} />
       </Route>

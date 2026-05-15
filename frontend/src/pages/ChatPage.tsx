@@ -1,13 +1,13 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, KeyboardEvent } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listChats, createChat, deleteChat, listMessages, sendMessage } from '../api/chats'
+import { listChats, createChat, deleteChat, updateChatTitle, listMessages, sendMessage } from '../api/chats'
 import { listModels } from '../api/ai'
 import { getUserSettings } from '../api/settings'
 import { ChatMessage } from '../components/chat/ChatMessage'
 import { ChatInput } from '../components/chat/ChatInput'
 import { Button } from '../components/common/Button'
 import { Chat, Message, AIModel } from '../types'
-import { Plus, Trash2, MessageSquare, Bot, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, MessageSquare, Bot, ChevronDown, Check, X } from 'lucide-react'
 
 function modelKey(provider: string, modelId: string) {
   return `${provider}:${modelId}`
@@ -18,6 +18,8 @@ export function ChatPage() {
   const [localMessages, setLocalMessages] = useState<Message[]>([])
   const [selectedModelKey, setSelectedModelKey] = useState<string | null>(null)
   const [showModelDropdown, setShowModelDropdown] = useState(false)
+  const [editingChatId, setEditingChatId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
@@ -107,6 +109,37 @@ export function ChatPage() {
     mutationFn: deleteChat,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['chats'] }); setActiveChatId(null) },
   })
+
+  const renameMutation = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) => updateChatTitle(id, title),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['chats'] })
+      setEditingChatId(null)
+    },
+  })
+
+  const startRename = (chat: Chat) => {
+    setEditingChatId(chat.id)
+    setEditTitle(chat.title)
+  }
+
+  const commitRename = (id: string) => {
+    const trimmed = editTitle.trim()
+    if (trimmed) {
+      renameMutation.mutate({ id, title: trimmed })
+    } else {
+      setEditingChatId(null)
+    }
+  }
+
+  const handleRenameKeyDown = (e: KeyboardEvent<HTMLInputElement>, id: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      commitRename(id)
+    } else if (e.key === 'Escape') {
+      setEditingChatId(null)
+    }
+  }
 
   const sendMutation = useMutation({
     mutationFn: ({ chatId, content }: { chatId: string; content: string }) => sendMessage(chatId, content),
@@ -213,25 +246,63 @@ export function ChatPage() {
               <MessageSquare className="w-8 h-8 text-gray-600 mx-auto mb-2" />
               <p className="text-xs text-gray-500">No chats yet</p>
             </div>
-          ) : (
-            chats.map(chat => (
-              <div
-                key={chat.id}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer group transition-colors ${
-                  activeChatId === chat.id ? 'bg-sky-900/30 text-sky-300' : 'hover:bg-gray-800 text-gray-300'
-                }`}
-                onClick={() => setActiveChatId(chat.id)}
-              >
-                <MessageSquare className="w-4 h-4 flex-shrink-0" />
-                <span className="text-xs flex-1 truncate">{chat.title}</span>
-                <button
-                  onClick={e => { e.stopPropagation(); deleteMutation.mutate(chat.id) }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all"
+            chats.map(chat => {
+              const isEditing = editingChatId === chat.id
+              return (
+                <div
+                  key={chat.id}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer group transition-colors ${
+                    activeChatId === chat.id ? 'bg-sky-900/30 text-sky-300' : 'hover:bg-gray-800 text-gray-300'
+                  }`}
+                  onClick={() => !isEditing && setActiveChatId(chat.id)}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))
+                  <MessageSquare className="w-4 h-4 flex-shrink-0" />
+                  {isEditing ? (
+                    <div className="flex-1 flex items-center gap-1 min-w-0">
+                      <input
+                        autoFocus
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        onKeyDown={e => handleRenameKeyDown(e, chat.id)}
+                        onBlur={() => commitRename(chat.id)}
+                        onClick={e => e.stopPropagation()}
+                        className="flex-1 min-w-0 px-1 py-0.5 text-xs bg-gray-900 border border-sky-500 rounded text-gray-200 outline-none"
+                        disabled={renameMutation.isPending}
+                      />
+                      <button
+                        onClick={e => { e.stopPropagation(); commitRename(chat.id) }}
+                        className="text-green-400 hover:text-green-300 flex-shrink-0"
+                        disabled={renameMutation.isPending}
+                      >
+                        <Check className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); setEditingChatId(null) }}
+                        className="text-gray-500 hover:text-gray-300 flex-shrink-0"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span
+                        className="text-xs flex-1 truncate"
+                        onDoubleClick={e => { e.stopPropagation(); startRename(chat) }}
+                        title="Double-click to rename"
+                      >
+                        {chat.title}
+                      </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); deleteMutation.mutate(chat.id) }}
+                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       </div>
