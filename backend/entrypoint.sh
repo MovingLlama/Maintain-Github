@@ -52,5 +52,8 @@ echo "Running database migrations..."
 alembic upgrade head
 
 echo "=== Starting application as appuser ==="
+# Ensure HOME points to appuser's actual home directory (not /root)
+# so asyncpg/psycopg2 can find SSL certificates in ~/.postgresql/
+export HOME=/app
 # Drop privileges from root to appuser and run CMD
 exec setpriv --reuid=appuser --regid=appuser --init-groups -- "$@"
