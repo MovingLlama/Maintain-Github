@@ -47,9 +47,48 @@ done
 echo "Fixing permissions for /app/repos..."
 chown -R appuser:appuser /app/repos 2>/dev/null || true
 
-# Run Alembic migrations
-echo "Running database migrations..."
-alembic upgrade head
+# Run Alembic migrations — but first check if this is a DB
+# that already has tables from the old create_all() path.
+echo "Checking database state..."
+MIGRATION_MODE=$(python -c "
+import psycopg2, os, sys
+try:
+    conn = psycopg2.connect(
+        host=os.environ['POSTGRES_HOST'],
+        port=int(os.environ.get('POSTGRES_PORT', 5432)),
+        dbname=os.environ['POSTGRES_DB'],
+        user=os.environ['POSTGRES_USER'],
+        password=os.environ['POSTGRES_PASSWORD']
+    )
+    cur = conn.cursor()
+    # Check if users table exists (old create_all path)
+    cur.execute(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')\")
+    users_exist = cur.fetchone()[0]
+    # Check if alembic_version table exists
+    cur.execute(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'alembic_version')\")
+    alembic_exists = cur.fetchone()[0]
+    conn.close()
+    if users_exist and not alembic_exists:
+        print('STAMP')
+    elif not users_exist:
+        print('MIGRATE')
+    else:
+        print('MIGRATE')  # normal path — alembic handles upgrades
+    sys.exit(0)
+except Exception as e:
+    print(f'CHECK_FAILED:{e}', file=sys.stderr)
+    sys.exit(1)
+")
+
+if [ "$MIGRATION_MODE" = "STAMP" ]; then
+    echo "Existing database detected without Alembic version table."
+    echo "Stamping current head revision (tables already exist from create_all)..."
+    alembic stamp head
+    echo "Stamp complete."
+else
+    echo "Running database migrations..."
+    alembic upgrade head
+fi
 
 echo "=== Starting application as appuser ==="
 # Ensure HOME points to appuser's actual home directory (not /root)

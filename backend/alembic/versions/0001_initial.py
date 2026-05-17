@@ -98,6 +98,13 @@ def upgrade() -> None:
     op.create_index("ix_chats_repository_id", "chats", ["repository_id"])
 
     # ─── messages (pre-0002: with Enum MessageRole) ──────────
+    # Create enum type idempotently (may already exist from old create_all)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE messagerole AS ENUM ('user', 'assistant', 'system', 'tool');
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$;
+    """)
     op.create_table(
         "messages",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
