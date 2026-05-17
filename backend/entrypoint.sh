@@ -47,10 +47,55 @@ done
 echo "Fixing permissions for /app/repos..."
 chown -R appuser:appuser /app/repos 2>/dev/null || true
 
-# Run Alembic migrations — but first check if this is a DB
-# that already has tables from the old create_all() path.
-echo "Checking database state..."
-MIGRATION_MODE=$(python -c "
+# Acquire a PostgreSQL advisory lock to ensure only one container
+# runs migrations at a time (prevents race conditions between
+# backend and worker starting simultaneously).
+echo "Acquiring migration lock..."
+LOCK_ACQUIRED=$(python -c "
+import psycopg2, os, sys
+try:
+    conn = psycopg2.connect(
+        host=os.environ['POSTGRES_HOST'],
+        port=int(os.environ.get('POSTGRES_PORT', 5432)),
+        dbname=os.environ['POSTGRES_DB'],
+        user=os.environ['POSTGRES_USER'],
+        password=os.environ['POSTGRES_PASSWORD']
+    )
+    cur = conn.cursor()
+    # pg_try_advisory_lock returns True if lock acquired, False if already held
+    cur.execute('SELECT pg_try_advisory_lock(1542789643)')
+    acquired = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    print('true' if acquired else 'false')
+except Exception as e:
+    print(f'false', file=sys.stderr)
+    sys.exit(0)
+")
+
+if [ "$LOCK_ACQUIRED" != "true" ]; then
+    echo "Migration lock is held by another container — skipping migrations."
+else
+    trap "echo 'Releasing migration lock...'; python -c \"
+import psycopg2, os
+conn = psycopg2.connect(
+    host=os.environ['POSTGRES_HOST'],
+    port=int(os.environ.get('POSTGRES_PORT', 5432)),
+    dbname=os.environ['POSTGRES_DB'],
+    user=os.environ['POSTGRES_USER'],
+    password=os.environ['POSTGRES_PASSWORD']
+)
+cur = conn.cursor()
+cur.execute('SELECT pg_advisory_unlock(1542789643)')
+conn.commit()
+conn.close()
+\"" EXIT
+
+    # Run Alembic migrations — but first check if this is a DB
+    # that already has tables from the old create_all() path.
+    echo "Checking database state..."
+    MIGRATION_MODE=$(python -c "
 import psycopg2, os, sys
 try:
     conn = psycopg2.connect(
@@ -80,14 +125,15 @@ except Exception as e:
     sys.exit(1)
 ")
 
-if [ "$MIGRATION_MODE" = "STAMP" ]; then
-    echo "Existing database detected without Alembic version table."
-    echo "Stamping current head revision (tables already exist from create_all)..."
-    alembic stamp head
-    echo "Stamp complete."
-else
-    echo "Running database migrations..."
-    alembic upgrade head
+    if [ "$MIGRATION_MODE" = "STAMP" ]; then
+        echo "Existing database detected without Alembic version table."
+        echo "Stamping current head revision (tables already exist from create_all)..."
+        alembic stamp head
+        echo "Stamp complete."
+    else
+        echo "Running database migrations..."
+        alembic upgrade head
+    fi
 fi
 
 echo "=== Starting application as appuser ==="

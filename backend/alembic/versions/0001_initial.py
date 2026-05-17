@@ -110,7 +110,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("chat_id", postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("chats.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("role", sa.Enum("user", "assistant", "system", "tool", name="messagerole"), nullable=False),
+        sa.Column("role", sa.Enum("user", "assistant", "system", "tool", name="messagerole", create_type=False), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("tool_calls", postgresql.JSONB(), nullable=True),
         sa.Column("tool_result", postgresql.JSONB(), nullable=True),
