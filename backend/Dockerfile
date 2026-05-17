@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
+# Create non-root user (used by entrypoint to drop privileges after setup)
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser && \
+    mkdir -p /app/repos && chown -R appuser:appuser /app
 
 WORKDIR /app
 
@@ -30,10 +31,7 @@ RUN if [ "$DEBUG" = "true" ]; then \
 # Copy application code
 COPY . .
 
-# Create repos directory and set permissions
-RUN mkdir -p /app/repos && chown -R appuser:appuser /app
-
-# Configure git safe directory
+# Configure git safe directory (container runs as root, entrypoint drops to appuser)
 RUN git config --global --add safe.directory '*'
 
 # Ensure entrypoint is executable
@@ -41,8 +39,6 @@ RUN chmod +x /app/entrypoint.sh
 
 # Use entrypoint for startup checks and permission fixes
 ENTRYPOINT ["/app/entrypoint.sh"]
-
-USER appuser
 
 EXPOSE 8000
 

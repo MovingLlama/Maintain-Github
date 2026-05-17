@@ -51,5 +51,6 @@ chown -R appuser:appuser /app/repos 2>/dev/null || true
 echo "Running database migrations..."
 alembic upgrade head
 
-echo "=== Starting application ==="
-exec uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips='*'
+echo "=== Starting application as appuser ==="
+# Drop privileges from root to appuser and run CMD
+exec setpriv --reuid=appuser --regid=appuser --init-groups -- "$@"

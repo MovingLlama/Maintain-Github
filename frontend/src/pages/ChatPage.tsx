@@ -22,6 +22,7 @@ export function ChatPage() {
   const [editTitle, setEditTitle] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const qc = useQueryClient()
 
   const { data: chats = [] } = useQuery({ queryKey: ['chats'], queryFn: listChats })
@@ -141,6 +142,22 @@ export function ChatPage() {
     }
   }
 
+  const handleChatClick = (chat: Chat) => {
+    if (editingChatId === chat.id) return // Don't interrupt active rename
+    if (clickTimerRef.current) {
+      // Second click → double click → rename
+      clearTimeout(clickTimerRef.current)
+      clickTimerRef.current = null
+      startRename(chat)
+    } else {
+      // First click → wait briefly to see if it's a double click
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null
+        setActiveChatId(chat.id)
+      }, 280)
+    }
+  }
+
   const sendMutation = useMutation({
     mutationFn: ({ chatId, content }: { chatId: string; content: string }) => sendMessage(chatId, content),
     onMutate: async ({ chatId, content }) => {
@@ -255,7 +272,7 @@ export function ChatPage() {
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer group transition-colors ${
                     activeChatId === chat.id ? 'bg-sky-900/30 text-sky-300' : 'hover:bg-gray-800 text-gray-300'
                   }`}
-                  onClick={() => !isEditing && setActiveChatId(chat.id)}
+                  onClick={() => handleChatClick(chat)}
                 >
                   <MessageSquare className="w-4 h-4 flex-shrink-0" />
                   {isEditing ? (
@@ -286,11 +303,7 @@ export function ChatPage() {
                     </div>
                   ) : (
                     <>
-                      <span
-                        className="text-xs flex-1 truncate"
-                        onDoubleClick={e => { e.stopPropagation(); startRename(chat) }}
-                        title="Double-click to rename"
-                      >
+                      <span className="text-xs flex-1 truncate" title="Double-click to rename">
                         {chat.title}
                       </span>
                       <button
