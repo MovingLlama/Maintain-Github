@@ -11,8 +11,9 @@ from uuid import UUID
 from app.db.base import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
-from app.models.chat import Chat, Message, MessageRole
+from app.models.chat import Chat, Message, ChatRepository
 from app.models.repository import Repository, RepoStatus
+from app.models.agent import Agent
 from app.schemas.chat import ChatCreate, ChatResponse, MessageCreate, MessageResponse
 from app.services.ai.agent_runner import AgentRunner
 from app.services.ai.ai_service import AIService, AIMessage
@@ -22,17 +23,35 @@ router = APIRouter(prefix="/api/chats", tags=["Chats"])
 ai_service = AIService()
 
 
+def _chat_to_response(chat: Chat) -> ChatResponse:
+    repo_ids = [cr.repository_id for cr in chat.repositories] if chat.repositories else []
+    return ChatResponse(
+        id=chat.id,
+        user_id=chat.user_id,
+        agent_id=chat.agent_id,
+        title=chat.title,
+        model_provider=chat.model_provider,
+        model_name=chat.model_name,
+        system_prompt=chat.system_prompt,
+        created_at=chat.created_at,
+        updated_at=chat.updated_at,
+        repository_ids=repo_ids,
+    )
+
+
 @router.get("/", response_model=list[ChatResponse])
 async def list_chats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(Chat)
+        .options(selectinload(Chat.repositories))
         .where(Chat.user_id == current_user.id)
         .order_by(Chat.updated_at.desc())
     )
-    return result.scalars().all()
+    return [_chat_to_response(c) for c in result.scalars().all()]
 
 
 @router.post("/", response_model=ChatResponse, status_code=status.HTTP_201_CREATED)
@@ -41,29 +60,60 @@ async def create_chat(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Validate repository if provided
-    if payload.repository_id:
+    # Validate agent if provided
+    if payload.agent_id:
         result = await db.execute(
-            select(Repository).where(
-                Repository.id == payload.repository_id,
+            select(Agent).where(
+                Agent.id == payload.agent_id,
+                (Agent.user_id == None) | (Agent.user_id == current_user.id),
+            )
+        )
+        agent = result.scalar_one_or_none()
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Validate repositories if provided
+    repo_ids = payload.repository_ids or []
+    if repo_ids:
+        result = await db.execute(
+            select(Repository.id).where(
+                Repository.id.in_(repo_ids),
                 Repository.owner_id == current_user.id,
             )
         )
-        if not result.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail="Repository not found")
+        found_ids = {r[0] for r in result.fetchall()}
+        missing = set(repo_ids) - found_ids
+        if missing:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Repositories not found: {missing}",
+            )
 
     chat = Chat(
         user_id=current_user.id,
+        agent_id=payload.agent_id,
         title=payload.title,
-        repository_id=payload.repository_id,
         model_provider=payload.model_provider,
         model_name=payload.model_name,
         system_prompt=payload.system_prompt,
-        is_agent_mode=payload.is_agent_mode,
     )
     db.add(chat)
     await db.flush()
-    return chat
+
+    # Attach repositories (many-to-many)
+    for repo_id in repo_ids:
+        db.add(ChatRepository(chat_id=chat.id, repository_id=repo_id))
+
+    await db.flush()
+
+    # Reload with eager-loaded relationships for response
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(Chat)
+        .options(selectinload(Chat.repositories))
+        .where(Chat.id == chat.id)
+    )
+    return _chat_to_response(result.scalar_one())
 
 
 @router.get("/{chat_id}", response_model=ChatResponse)
@@ -72,13 +122,16 @@ async def get_chat(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(Chat).where(Chat.id == chat_id, Chat.user_id == current_user.id)
+        select(Chat)
+        .options(selectinload(Chat.repositories))
+        .where(Chat.id == chat_id, Chat.user_id == current_user.id)
     )
     chat = result.scalar_one_or_none()
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
-    return chat
+    return _chat_to_response(chat)
 
 
 @router.get("/{chat_id}/messages", response_model=list[MessageResponse])
@@ -87,7 +140,6 @@ async def list_messages(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Verify ownership
     result = await db.execute(
         select(Chat).where(Chat.id == chat_id, Chat.user_id == current_user.id)
     )
@@ -109,9 +161,12 @@ async def send_message(
     current_user: User = Depends(get_current_user),
 ):
     """Send a message and get AI response. Supports streaming via ?stream=true"""
-    # Load chat
+    from sqlalchemy.orm import selectinload
+
     result = await db.execute(
-        select(Chat).where(Chat.id == chat_id, Chat.user_id == current_user.id)
+        select(Chat)
+        .options(selectinload(Chat.repositories))
+        .where(Chat.id == chat_id, Chat.user_id == current_user.id)
     )
     chat = result.scalar_one_or_none()
     if not chat:
@@ -120,40 +175,40 @@ async def send_message(
     # Save user message
     user_msg = Message(
         chat_id=chat.id,
-        role=MessageRole.USER,
+        role="user",
         content=payload.content,
     )
     db.add(user_msg)
     await db.flush()
 
-    # Get repo context if needed
-    repo_full_name = None
-    if chat.repository_id:
+    # Collect repo full names from attached repositories
+    repo_full_names: list[str] = []
+    if chat.repositories:
+        repo_ids = [cr.repository_id for cr in chat.repositories]
         repo_result = await db.execute(
             select(Repository).where(
-                Repository.id == chat.repository_id,
+                Repository.id.in_(repo_ids),
                 Repository.status == RepoStatus.READY,
             )
         )
-        repo = repo_result.scalar_one_or_none()
-        if repo:
-            repo_full_name = repo.full_name
+        repo_full_names = [r.full_name for r in repo_result.scalars().all()]
+
+    # Determine if agent mode (agent_id is set)
+    is_agent_mode = chat.agent_id is not None
 
     # Run agent or simple chat
     runner = AgentRunner(db)
 
-    if stream and not chat.is_agent_mode:
-        # Streaming response (simple chat only)
+    if stream and not is_agent_mode:
         async def generate():
             full_response = ""
             async for chunk in runner.stream_simple(chat, payload.content):
                 full_response += chunk
                 yield f"data: {json.dumps({'content': chunk})}\n\n"
-            
-            # Save assistant message after streaming
+
             assistant_msg = Message(
                 chat_id=chat.id,
-                role=MessageRole.ASSISTANT,
+                role="assistant",
                 content=full_response,
                 model_used=chat.model_name,
             )
@@ -168,46 +223,40 @@ async def send_message(
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
     else:
-        # Non-streaming (also used for agent mode)
         response_text = await runner.run(
             chat=chat,
             user_message=payload.content,
             user_id=str(current_user.id),
-            repo_full_name=repo_full_name,
+            repo_full_names=repo_full_names,
         )
 
-        # Save assistant message
         assistant_msg = Message(
             chat_id=chat.id,
-            role=MessageRole.ASSISTANT,
+            role="assistant",
             content=response_text,
             model_used=chat.model_name,
         )
         db.add(assistant_msg)
 
-        # Auto-generate title on first message exchange
         await _maybe_generate_title(chat, current_user, db)
-
         await db.commit()
 
         return {"role": "assistant", "content": response_text}
 
 
 async def _maybe_generate_title(chat: Chat, current_user: User, db: AsyncSession):
-    """Generate a title for the chat if it's the first message exchange (only 2 messages: user + assistant)."""
+    """Generate a title for the chat if it's the first message exchange."""
     if chat.title != "New Chat":
-        return  # Already has a custom title
+        return
 
-    # Count messages - only generate on first exchange
     from sqlalchemy import func as sqlfunc
     result = await db.execute(
         select(sqlfunc.count(Message.id)).where(Message.chat_id == chat.id)
     )
     msg_count = result.scalar() or 0
     if msg_count != 2:
-        return  # Not the first exchange
+        return
 
-    # Load the messages for context
     result = await db.execute(
         select(Message).where(Message.chat_id == chat.id).order_by(Message.created_at).limit(2)
     )
@@ -215,9 +264,8 @@ async def _maybe_generate_title(chat: Chat, current_user: User, db: AsyncSession
     if len(msgs) < 2:
         return
 
-    conversation = "\n".join(f"{msg.role.value}: {msg.content[:200]}" for msg in msgs)
+    conversation = "\n".join(f"{msg.role}: {msg.content[:200]}" for msg in msgs)
 
-    # Determine which model to use
     user_settings = current_user.settings or {}
     title_model_key = user_settings.get("title_generation_model")
     if title_model_key:
@@ -226,7 +274,7 @@ async def _maybe_generate_title(chat: Chat, current_user: User, db: AsyncSession
             title_provider = title_model_key[:colon_idx]
             title_model_name = title_model_key[colon_idx + 1:]
         else:
-            return  # Invalid key format
+            return
     else:
         title_provider = chat.model_provider
         title_model_name = chat.model_name or ("llama3:8b" if title_provider == "ollama" else "anthropic/claude-3-haiku")
@@ -282,6 +330,7 @@ class ChatUpdatePayload(BaseModel):
     title: Optional[str] = None
     system_prompt: Optional[str] = None
 
+
 @router.patch("/{chat_id}/title")
 async def update_chat_title(
     chat_id: UUID,
@@ -308,7 +357,6 @@ async def generate_chat_title(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Auto-generate a title for the chat using AI based on the conversation."""
     result = await db.execute(
         select(Chat).where(Chat.id == chat_id, Chat.user_id == current_user.id)
     )
@@ -316,7 +364,6 @@ async def generate_chat_title(
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
 
-    # Load first few messages for context
     result = await db.execute(
         select(Message).where(Message.chat_id == chat_id).order_by(Message.created_at).limit(4)
     )
@@ -325,12 +372,10 @@ async def generate_chat_title(
     if not msgs:
         raise HTTPException(status_code=400, detail="No messages in chat")
 
-    # Build conversation snippet
     conversation = "\n".join(
-        f"{msg.role.value}: {msg.content[:200]}" for msg in msgs
+        f"{msg.role}: {msg.content[:200]}" for msg in msgs
     )
 
-    # Determine which model to use for title generation
     user_settings = current_user.settings or {}
     title_model_key = user_settings.get("title_generation_model")
     if title_model_key:
@@ -341,7 +386,6 @@ async def generate_chat_title(
         title_provider = chat.model_provider
         title_model_name = chat.model_name or ("llama3:8b" if title_provider == "ollama" else "anthropic/claude-3-haiku")
 
-    # Generate title via AI
     try:
         title_prompt = f"""Generate a very short, concise title (max 6 words) for this conversation.
 Respond with ONLY the title, no quotes, no explanation.
@@ -357,13 +401,11 @@ Title:"""
             messages=[AIMessage("user", title_prompt)],
         )
 
-        # Parse title from response
         if title_provider == "ollama":
             title = response.get("message", {}).get("content", "").strip()
         else:
             title = response["choices"][0].get("message", {}).get("content", "").strip()
 
-        # Clean up: remove quotes, limit length
         title = title.strip('"\'').strip()
         if len(title) > 80:
             title = title[:77] + "..."

@@ -24,6 +24,8 @@ export interface Repository {
   is_private: boolean
   local_path: string | null
   last_synced_at: string | null
+  issue_analysis_model: string | null
+  issue_analysis_enabled: boolean
   created_at: string
   updated_at: string
 }
@@ -41,15 +43,30 @@ export interface GitHubRepo {
   updated_at: string | null
 }
 
+export interface Agent {
+  id: string
+  user_id: string | null
+  name: string
+  description: string | null
+  system_prompt: string | null
+  model_provider: 'ollama' | 'openrouter' | null
+  model_name: string | null
+  tools_config: string[]
+  is_default: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface Chat {
   id: string
   user_id: string
-  repository_id: string | null
+  agent_id: string | null
   title: string
   model_provider: 'ollama' | 'openrouter'
   model_name: string | null
   system_prompt: string | null
-  is_agent_mode: boolean
+  repository_ids: string[] | null
   created_at: string
   updated_at: string
 }
@@ -74,13 +91,47 @@ export interface AIModel {
 }
 
 export interface UserSettings {
-  enabled_models: string[]              // composite keys: "provider:model_id"
-  default_chat_model: string | null     // composite key or null
-  title_generation_model: string | null // composite key – model used to auto-generate chat titles
+  enabled_models: string[]
+  default_chat_model: string | null
+  title_generation_model: string | null
 }
 
 export interface FileTreeItem {
   path: string
   type: 'file' | 'directory'
   size: number | null
+}
+
+export interface RepoSummary {
+  id: string
+  repository_id: string
+  summary_text: string | null
+  file_tree_json: any
+  key_files_json: any
+  languages_json: any
+  total_files: number
+  total_size: number
+  last_indexed_at: string
+  content_hash: string | null
+}
+
+export interface RepoIssue {
+  id: string
+  repository_id: string
+  github_issue_id: number
+  number: number
+  title: string
+  body: string | null
+  state: 'open' | 'closed'
+  labels: string[]
+  assignee: string | null
+  html_url: string | null
+  created_at: string
+  updated_at: string
+  closed_at: string | null
+  fix_generated: boolean
+  fix_summary: string | null
+  fix_branch: string | null
+  fix_model_used: string | null
+  analyzed_at: string | null
 }

@@ -1,70 +1,83 @@
-import { Bot, Pencil, Trash2, MessageSquare } from 'lucide-react'
-import { Chat } from '../../types'
+import { Agent, AIModel } from '../../types'
+import { Bot, Trash2, Edit3, Lock } from 'lucide-react'
 
 interface AgentCardProps {
-  agent: Chat
-  isActive: boolean
-  onClick: () => void
-  onEdit: () => void
-  onDelete: () => void
-  onChat: () => void
+  agent: Agent
+  isSystem: boolean
+  onEdit?: () => void
+  onDelete?: () => void
 }
 
-export function AgentCard({ agent, isActive, onClick, onEdit, onDelete, onChat }: AgentCardProps) {
+export function AgentCard({ agent, isSystem, onEdit, onDelete }: AgentCardProps) {
+  const toolLabels: Record<string, string> = {
+    read_file: 'Read',
+    write_file: 'Write',
+    list_files: 'List',
+    get_git_diff: 'Diff',
+    get_git_log: 'Log',
+    search_in_files: 'Search',
+  }
+
   return (
-    <div
-      onClick={onClick}
-      className={`p-4 rounded-xl border cursor-pointer transition-all group ${
-        isActive
-          ? 'bg-sky-900/20 border-sky-700/50'
-          : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
+    <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 hover:border-gray-600 transition-colors">
+      <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div className={`p-1.5 rounded-lg flex-shrink-0 ${isActive ? 'bg-sky-500/20' : 'bg-gray-700'}`}>
-            <Bot className={`w-4 h-4 ${isActive ? 'text-sky-400' : 'text-gray-400'}`} />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-sm font-medium text-white truncate">{agent.title}</h3>
-            <p className="text-[10px] text-gray-500 truncate">
-              {agent.model_provider}/{agent.model_name || 'default'}
-            </p>
-          </div>
+          <Bot className="w-4 h-4 text-sky-400 shrink-0" />
+          <h3 className="text-sm font-semibold text-white truncate">{agent.name}</h3>
+          {isSystem && (
+            <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
+              <Lock className="w-2.5 h-2.5" />
+              System
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-          <button
-            onClick={e => { e.stopPropagation(); onChat() }}
-            className="p-1 rounded text-gray-400 hover:text-sky-400 hover:bg-gray-700 transition-colors"
-            title="Open chat"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={e => { e.stopPropagation(); onEdit() }}
-            className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
-            title="Edit agent"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={e => { e.stopPropagation(); onDelete() }}
-            className="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors"
-            title="Delete agent"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        {!isSystem && (
+          <div className="flex items-center gap-1 shrink-0">
+            {onEdit && (
+              <button
+                onClick={onEdit}
+                className="text-gray-500 hover:text-sky-400 p-1 transition-colors"
+                title="Edit agent"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                className="text-gray-500 hover:text-red-400 p-1 transition-colors"
+                title="Delete agent"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
-      {agent.system_prompt && (
-        <p className="mt-2 text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
-          {agent.system_prompt.slice(0, 120)}
-          {agent.system_prompt.length > 120 ? '...' : ''}
-        </p>
+
+      {agent.description && (
+        <p className="text-xs text-gray-400 mt-2 line-clamp-2">{agent.description}</p>
       )}
-      {!agent.system_prompt && (
-        <p className="mt-2 text-[11px] text-gray-600 italic">Default system prompt</p>
-      )}
+
+      <div className="flex flex-wrap items-center gap-2 mt-3">
+        {agent.model_provider && agent.model_name && (
+          <span className="text-xs bg-sky-900/30 text-sky-300 px-1.5 py-0.5 rounded">
+            {agent.model_name}
+          </span>
+        )}
+        {agent.tools_config.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {agent.tools_config.map(tool => (
+              <span
+                key={tool}
+                className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded"
+              >
+                {toolLabels[tool] || tool}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

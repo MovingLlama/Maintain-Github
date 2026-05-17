@@ -1,156 +1,173 @@
-import { useState, useEffect, FormEvent } from 'react'
-import { X, Save } from 'lucide-react'
-import { Chat, AIModel } from '../../types'
+import { useState } from 'react'
+import { Button } from '../common/Button'
+import { AIModel } from '../../types'
 
 export interface AgentFormData {
-  title: string
+  name: string
+  description: string
   system_prompt: string
-  model_provider: 'ollama' | 'openrouter'
+  model_provider: string
   model_name: string
-  repository_id: string | null
+  tools_config: string[]
 }
+
+const AVAILABLE_TOOLS = [
+  { value: 'read_file', label: 'Read File', description: 'Read file contents from the repo' },
+  { value: 'write_file', label: 'Write File', description: 'Create or update files' },
+  { value: 'list_files', label: 'List Files', description: 'Browse directory structure' },
+  { value: 'get_git_diff', label: 'Git Diff', description: 'View uncommitted changes' },
+  { value: 'get_git_log', label: 'Git Log', description: 'View commit history' },
+  { value: 'search_in_files', label: 'Search', description: 'Search for patterns in files' },
+]
 
 interface AgentFormProps {
-  initial?: AgentFormData
-  enabledModels: AIModel[]
-  repositories: { id: string; full_name: string }[]
-  onSave: (data: AgentFormData) => void
-  onCancel: () => void
-  isPending: boolean
+  onSubmit: (data: AgentFormData) => Promise<void>
+  models: AIModel[]
+  initialData?: Partial<AgentFormData>
 }
 
-export function AgentForm({
-  initial,
-  enabledModels,
-  repositories,
-  onSave,
-  onCancel,
-  isPending,
-}: AgentFormProps) {
-  const [title, setTitle] = useState(initial?.title ?? '')
-  const [systemPrompt, setSystemPrompt] = useState(initial?.system_prompt ?? '')
-  const [modelKey, setModelKey] = useState(() => {
-    if (initial) return `${initial.model_provider}:${initial.model_name}`
-    return enabledModels.length > 0
-      ? `${enabledModels[0].provider}:${enabledModels[0].id}`
+export function AgentForm({ onSubmit, models, initialData }: AgentFormProps) {
+  const [name, setName] = useState(initialData?.name || '')
+  const [description, setDescription] = useState(initialData?.description || '')
+  const [systemPrompt, setSystemPrompt] = useState(initialData?.system_prompt || '')
+  const [modelKey, setModelKey] = useState(
+    initialData?.model_provider && initialData?.model_name
+      ? `${initialData.model_provider}:${initialData.model_name}`
       : ''
-  })
-  const [repoId, setRepoId] = useState(initial?.repository_id ?? '')
+  )
+  const [toolsConfig, setToolsConfig] = useState<string[]>(initialData?.tools_config || [])
+  const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    if (initial) {
-      setTitle(initial.title)
-      setSystemPrompt(initial.system_prompt)
-      setModelKey(`${initial.model_provider}:${initial.model_name}`)
-      setRepoId(initial.repository_id ?? '')
-    }
-  }, [initial])
+  const toggleTool = (toolValue: string) => {
+    setToolsConfig(prev =>
+      prev.includes(toolValue)
+        ? prev.filter(t => t !== toolValue)
+        : [...prev, toolValue]
+    )
+  }
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim() || !modelKey) return
+    if (!name.trim()) return
 
-    const colonIdx = modelKey.indexOf(':')
-    onSave({
-      title: title.trim(),
-      system_prompt: systemPrompt.trim(),
-      model_provider: modelKey.substring(0, colonIdx) as 'ollama' | 'openrouter',
-      model_name: modelKey.substring(colonIdx + 1),
-      repository_id: repoId || null,
-    })
+    let modelProvider = ''
+    let modelName = ''
+    if (modelKey) {
+      const colonIdx = modelKey.indexOf(':')
+      if (colonIdx > 0) {
+        modelProvider = modelKey.substring(0, colonIdx)
+        modelName = modelKey.substring(colonIdx + 1)
+      }
+    }
+
+    setSubmitting(true)
+    try {
+      await onSubmit({
+        name: name.trim(),
+        description: description.trim(),
+        system_prompt: systemPrompt.trim(),
+        model_provider: modelProvider || '',
+        model_name: modelName || '',
+        tools_config: toolsConfig,
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Name */}
       <div>
-        <label className="block text-xs font-medium text-gray-400 mb-1">Agent Name</label>
+        <label className="block text-xs font-medium text-gray-400 mb-1">Name *</label>
         <input
           type="text"
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder="e.g. Code Reviewer"
-          className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
-          autoFocus
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="e.g. My Code Reviewer"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-sky-500 focus:outline-none"
           required
         />
       </div>
 
+      {/* Description */}
       <div>
-        <label className="block text-xs font-medium text-gray-400 mb-1">
-          System Prompt
-          <span className="text-gray-600 ml-1">(defines agent behavior)</span>
-        </label>
+        <label className="block text-xs font-medium text-gray-400 mb-1">Description</label>
+        <input
+          type="text"
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder="What does this agent do?"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-sky-500 focus:outline-none"
+        />
+      </div>
+
+      {/* System Prompt */}
+      <div>
+        <label className="block text-xs font-medium text-gray-400 mb-1">System Prompt</label>
         <textarea
           value={systemPrompt}
           onChange={e => setSystemPrompt(e.target.value)}
-          placeholder="You are an expert code reviewer. Focus on..."
-          rows={5}
-          className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500 resize-none"
+          placeholder="Instructions that define the agent's behavior..."
+          rows={4}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-sky-500 focus:outline-none resize-none"
         />
-        <p className="text-[10px] text-gray-600 mt-1">
-          Leave empty to use the default expert software engineer prompt.
-        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">Model</label>
-          <select
-            value={modelKey}
-            onChange={e => setModelKey(e.target.value)}
-            className="w-full px-2.5 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:border-sky-500"
-          >
-            {enabledModels.length === 0 && (
-              <option value="" disabled>No models enabled</option>
-            )}
-            {enabledModels.map(m => {
-              const key = `${m.provider}:${m.id}`
-              return (
-                <option key={key} value={key}>
-                  [{m.provider}] {m.name}
-                </option>
-              )
-            })}
-          </select>
-        </div>
+      {/* Model */}
+      <div>
+        <label className="block text-xs font-medium text-gray-400 mb-1">
+          Model <span className="text-gray-600">(optional — inherits from chat if empty)</span>
+        </label>
+        <select
+          value={modelKey}
+          onChange={e => setModelKey(e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+        >
+          <option value="">Inherit from chat</option>
+          {models.map(m => (
+            <option key={`${m.provider}:${m.id}`} value={`${m.provider}:${m.id}`}>
+              [{m.provider}] {m.name || m.id}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1">
-            Repository <span className="text-gray-600">(optional)</span>
-          </label>
-          <select
-            value={repoId}
-            onChange={e => setRepoId(e.target.value)}
-            className="w-full px-2.5 py-2 text-sm bg-gray-800 border border-gray-700 rounded-lg text-gray-200 focus:outline-none focus:border-sky-500"
-          >
-            <option value="">None</option>
-            {repositories.map(repo => (
-              <option key={repo.id} value={repo.id}>
-                {repo.full_name}
-              </option>
-            ))}
-          </select>
+      {/* Tools */}
+      <div>
+        <label className="block text-xs font-medium text-gray-400 mb-2">
+          Tools ({toolsConfig.length} selected)
+        </label>
+        <div className="space-y-1.5">
+          {AVAILABLE_TOOLS.map(tool => (
+            <label
+              key={tool.value}
+              className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
+                toolsConfig.includes(tool.value)
+                  ? 'border-sky-600 bg-sky-900/20'
+                  : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={toolsConfig.includes(tool.value)}
+                onChange={() => toggleTool(tool.value)}
+                className="rounded bg-gray-700 border-gray-600 text-sky-500 focus:ring-sky-500"
+              />
+              <div>
+                <span className="text-sm text-white">{tool.label}</span>
+                <span className="text-xs text-gray-500 ml-2">{tool.description}</span>
+              </div>
+            </label>
+          ))}
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-700">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={isPending}
-          className="px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1"
-        >
-          <X className="w-3.5 h-3.5" />
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isPending || !title.trim() || !modelKey}
-          className="px-4 py-1.5 text-xs bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-1.5"
-        >
-          <Save className="w-3.5 h-3.5" />
-          {isPending ? 'Saving...' : 'Save Agent'}
-        </button>
+      {/* Submit */}
+      <div className="flex items-center justify-end gap-3 pt-2">
+        <Button type="submit" disabled={submitting || !name.trim()}>
+          {submitting ? 'Saving...' : initialData ? 'Update Agent' : 'Create Agent'}
+        </Button>
       </div>
     </form>
   )
