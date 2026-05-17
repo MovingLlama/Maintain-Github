@@ -31,8 +31,8 @@ RUN if [ "$DEBUG" = "true" ]; then \
 # Copy application code
 COPY . .
 
-# Configure git safe directory (container runs as root, entrypoint drops to appuser)
-RUN git config --global --add safe.directory '*'
+# Configure git safe directory system-wide (applies to all users including appuser)
+RUN git config --system --add safe.directory '*'
 
 # Ensure entrypoint is executable
 RUN chmod +x /app/entrypoint.sh
