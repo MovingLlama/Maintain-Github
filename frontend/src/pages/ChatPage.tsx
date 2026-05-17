@@ -239,7 +239,7 @@ export function ChatPage() {
 
         {/* Input */}
         <div className="p-4 border-t border-gray-800">
-          <ChatInput onSend={handleSend} disabled={sendMutation.isPending || createChatMutation.isPending} />
+          <ChatInput onSend={handleSend} isLoading={sendMutation.isPending || createChatMutation.isPending} />
         </div>
       </div>
 

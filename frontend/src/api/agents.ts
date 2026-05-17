@@ -1,4 +1,4 @@
-import { api } from './client'
+import api from './client'
 import { Agent } from '../types'
 
 export async function listAgents(): Promise<Agent[]> {

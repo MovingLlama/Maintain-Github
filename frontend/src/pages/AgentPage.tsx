@@ -102,7 +102,7 @@ export function AgentPage() {
                 </button>
               </div>
               <AgentForm
-                onSubmit={async (data) => createMutation.mutateAsync(data)}
+                onSubmit={async (data) => { await createMutation.mutateAsync(data) }}
                 models={allModels}
                 initialData={editingAgent ? {
                   name: editingAgent.name,
