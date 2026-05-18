@@ -1,6 +1,7 @@
 """
-Database initialization: checks if schema exists and creates it if not.
-Also seeds default system agents on first run.
+Database initialization: runs on EVERY startup.
+- Creates missing database tables (on first run).
+- Syncs default system agents on EVERY startup (names restored, details refreshed).
 """
 import logging
 from sqlalchemy.ext.asyncio import AsyncEngine
