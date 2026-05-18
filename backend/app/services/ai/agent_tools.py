@@ -87,6 +87,31 @@ AGENT_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "delegate_to_agent",
+            "description": (
+                "Delegate a sub-task to another specialized AI agent and return its response. "
+                "Use this to get expert input from other agents like Code Writer, Bug Fixer, "
+                "or Code Reviewer for specific aspects of your task."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "agent_name": {
+                        "type": "string",
+                        "description": "Name of the agent to delegate to (e.g. 'Code Writer', 'Bug Fixer', 'Code Reviewer', 'Software Architect', 'DevOps Helper')",
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "The specific task or question to pass to the sub-agent. Be clear and detailed.",
+                    },
+                },
+                "required": ["agent_name", "task"],
+            },
+        },
+    },
 ]
 
 

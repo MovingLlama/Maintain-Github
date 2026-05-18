@@ -13,6 +13,7 @@ TOOL_CATALOG = {
     "get_git_diff": "Show current uncommitted changes (git diff)",
     "get_git_log": "Show recent commit history",
     "search_in_files": "Search for patterns in repository files",
+    "delegate_to_agent": "Delegate a sub-task to another specialized AI agent",
 }
 
 DEFAULT_AGENTS: list[dict[str, Any]] = [
@@ -46,7 +47,7 @@ Output format: Start with a high-level summary, then dive into specifics.
 Use headings and bullet points for clarity.""",
         "model_provider": None,  # inherit from chat
         "model_name": None,
-        "tools_config": ["read_file", "list_files", "search_in_files", "get_git_log"],
+        "tools_config": ["read_file", "list_files", "search_in_files", "get_git_log", "delegate_to_agent"],
         "is_default": True,
         "is_active": True,
     },
