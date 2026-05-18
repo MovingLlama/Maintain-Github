@@ -10,4 +10,36 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent double-tap zoom on buttons */
+  touch-action: manipulation;
+  /* Prevent overscroll bounce on mobile */
+  overscroll-behavior: none;
+}
+
+/* Ensure text inputs are at least 16px on mobile to prevent iOS zoom */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: max(16px, inherit);
+  }
+}
+
+/* Custom scrollbar for WebKit */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(55, 65, 81);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(75, 85, 99);
 }

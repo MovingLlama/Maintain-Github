@@ -17,11 +17,9 @@ function groupModels(models: AIModel[], provider: string): Map<string, AIModel[]
   for (const m of models) {
     let family: string
     if (provider === 'ollama') {
-      // ollama: "llama3:8b" → family "llama3"
       const colonIdx = m.id.indexOf(':')
       family = colonIdx > 0 ? m.id.substring(0, colonIdx) : m.id
     } else {
-      // openrouter: "meta-llama/llama-3-70b" → family "meta-llama"
       const slashIdx = m.id.indexOf('/')
       family = slashIdx > 0 ? m.id.substring(0, slashIdx) : m.id
     }
@@ -82,12 +80,10 @@ export function SettingsPage() {
     } else {
       next = [...enabledModels, key]
     }
-    // If we removed the default model, clear it too
     let nextDefault = defaultModel
     if (!next.includes(defaultModel ?? '')) {
       nextDefault = next.length > 0 ? next[0] : null
     }
-    // If this is the first enabled model and no default was set, auto-set as default
     if (next.length === 1 && !nextDefault) {
       nextDefault = next[0]
     }
@@ -106,7 +102,6 @@ export function SettingsPage() {
     saveMutation.mutate({ title_generation_model: key })
   }
 
-  // Build flat list of all enabled models for selectors
   const flatEnabledModels = (models?.ollama ?? [])
     .concat(models?.openrouter ?? [])
     .filter(m => enabledModels.includes(modelKey(m.provider, m.id)))
@@ -126,7 +121,6 @@ export function SettingsPage() {
   const openRouterGroups = useMemo(() => {
     const groups = groupModels(openRouterModels, 'openrouter')
     if (!openRouterSearch.trim()) return groups
-    // Filter groups by search query
     const filtered = new Map<string, AIModel[]>()
     const q = openRouterSearch.toLowerCase()
     for (const [family, familyModels] of groups) {
@@ -139,20 +133,20 @@ export function SettingsPage() {
   }, [openRouterModels, openRouterSearch])
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-white">Settings</h1>
+    <div className="h-full overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6 max-w-2xl mx-auto">
+      <h1 className="text-xl md:text-2xl font-bold text-white">Settings</h1>
 
       {/* User Info */}
-      <section className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
+      <section className="bg-gray-900 rounded-2xl border border-gray-800 p-4 md:p-5 space-y-4">
         <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
           <Github className="w-4 h-4" />
           GitHub Account
         </h2>
-        <div className="flex items-center gap-4 p-3 bg-gray-800/50 rounded-xl border border-gray-700">
+        <div className="flex items-center gap-3 md:gap-4 p-3 bg-gray-800/50 rounded-xl border border-gray-700">
           <img
             src={user?.github_avatar_url || ''}
             alt={user?.github_login || 'User'}
-            className="w-12 h-12 rounded-full"
+            className="w-10 h-10 md:w-12 md:h-12 rounded-full"
           />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">{user?.github_name || user?.github_login}</p>
@@ -162,7 +156,7 @@ export function SettingsPage() {
       </section>
 
       {/* AI Models – interactive toggles */}
-      <section className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
+      <section className="bg-gray-900 rounded-2xl border border-gray-800 p-4 md:p-5 space-y-4">
         <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
           <Cpu className="w-4 h-4" />
           AI Model Configuration
@@ -174,9 +168,9 @@ export function SettingsPage() {
         {settingsLoading ? (
           <div className="text-xs text-gray-500 italic py-4">Loading settings…</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             {/* --- Ollama Column --- */}
-            <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 space-y-3">
+            <div className="p-3 md:p-4 bg-gray-800/50 rounded-xl border border-gray-700 space-y-3">
               <div className="flex items-center gap-2 text-xs font-medium text-sky-400">
                 <Cloud className="w-3 h-3" />
                 Ollama (Local)
@@ -194,8 +188,8 @@ export function SettingsPage() {
                           onClick={() => toggleGroup(family)}
                           className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-700/50 transition-colors"
                         >
-                          <span className="text-xs font-medium text-gray-300">{family}</span>
-                          <span className="flex items-center gap-1.5">
+                          <span className="text-xs font-medium text-gray-300 truncate mr-2">{family}</span>
+                          <span className="flex items-center gap-1.5 shrink-0">
                             <span className="text-[10px] text-gray-600">{familyModels.length}</span>
                             {isExpanded ? (
                               <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
@@ -218,7 +212,7 @@ export function SettingsPage() {
                                     <button
                                       onClick={() => toggleModel('ollama', model.id)}
                                       disabled={saveMutation.isPending}
-                                      className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"
+                                      className="shrink-0 text-gray-400 hover:text-white transition-colors"
                                     >
                                       {enabled ? (
                                         <ToggleRight className="w-4 h-4 text-sky-400" />
@@ -230,7 +224,7 @@ export function SettingsPage() {
                                       {model.name}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <div className="flex items-center gap-1.5 shrink-0">
                                     <span className="text-[10px] text-gray-600">
                                       {model.size ? `${(model.size / 1e9).toFixed(1)}GB` : ''}
                                     </span>
@@ -270,12 +264,12 @@ export function SettingsPage() {
                     onChange={e => setPullModelName(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && pullModelName.trim() && pullMutation.mutate(pullModelName.trim())}
                     placeholder="e.g. llama3:8b"
-                    className="flex-1 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded-md text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+                    className="flex-1 min-w-0 px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded-md text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
                   />
                   <button
                     onClick={() => pullModelName.trim() && pullMutation.mutate(pullModelName.trim())}
                     disabled={pullMutation.isPending || !pullModelName.trim()}
-                    className="px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-md flex items-center gap-1 transition-colors"
+                    className="px-2 py-1 text-xs bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-md flex items-center gap-1 transition-colors shrink-0"
                   >
                     {pullMutation.isPending ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -303,7 +297,7 @@ export function SettingsPage() {
             </div>
 
             {/* --- OpenRouter Column --- */}
-            <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 space-y-3">
+            <div className="p-3 md:p-4 bg-gray-800/50 rounded-xl border border-gray-700 space-y-3">
               <div className="flex items-center gap-2 text-xs font-medium text-purple-400">
                 <Shield className="w-3 h-3" />
                 OpenRouter (Cloud)
@@ -326,7 +320,7 @@ export function SettingsPage() {
                   {openRouterSearch ? 'No matching models' : 'No models found'}
                 </p>
               ) : (
-                <div className="space-y-2 max-h-80 overflow-y-auto">
+                <div className="space-y-2 max-h-60 md:max-h-80 overflow-y-auto">
                   {Array.from(openRouterGroups.entries()).map(([family, familyModels]) => {
                     const isExpanded = expandedGroups.has(family) || openRouterGroups.size === 1 || !!openRouterSearch
                     return (
@@ -335,8 +329,8 @@ export function SettingsPage() {
                           onClick={() => toggleGroup(family)}
                           className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-700/50 transition-colors"
                         >
-                          <span className="text-xs font-medium text-gray-300 truncate">{family}</span>
-                          <span className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-xs font-medium text-gray-300 truncate mr-2">{family}</span>
+                          <span className="flex items-center gap-1.5 shrink-0">
                             <span className="text-[10px] text-gray-600">{familyModels.length}</span>
                             {isExpanded ? (
                               <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
@@ -359,7 +353,7 @@ export function SettingsPage() {
                                     <button
                                       onClick={() => toggleModel('openrouter', model.id)}
                                       disabled={saveMutation.isPending}
-                                      className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"
+                                      className="shrink-0 text-gray-400 hover:text-white transition-colors"
                                     >
                                       {enabled ? (
                                         <ToggleRight className="w-4 h-4 text-sky-400" />
@@ -371,7 +365,7 @@ export function SettingsPage() {
                                       {model.name}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <div className="flex items-center gap-1.5 shrink-0">
                                     <span className="text-[10px] text-gray-600">
                                       {model.context_length ? `${(model.context_length / 1000).toFixed(0)}k` : ''}
                                     </span>
@@ -434,7 +428,7 @@ export function SettingsPage() {
       </section>
 
       {/* System Status */}
-      <section className="bg-gray-900 rounded-2xl border border-gray-800 p-5 space-y-4">
+      <section className="bg-gray-900 rounded-2xl border border-gray-800 p-4 md:p-5 space-y-4">
         <h2 className="text-sm font-semibold text-gray-300">System Status</h2>
         <div className="grid grid-cols-2 gap-3">
           <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700 flex items-center justify-between">

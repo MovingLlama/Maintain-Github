@@ -1,8 +1,9 @@
-import { NavLink } from 'react-router-dom'
-import { GitBranch, MessageSquare, Settings, LogOut, Github, Bot } from 'lucide-react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { GitBranch, MessageSquare, Settings, LogOut, Github, Bot, X } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { logout } from '../../api/auth'
 import { useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 
 const navItems = [
   { to: '/repos', icon: GitBranch, label: 'Repositories' },
@@ -11,9 +12,20 @@ const navItems = [
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  isMobile?: boolean
+  onClose?: () => void
+}
+
+export function Sidebar({ isMobile, onClose }: SidebarProps) {
   const { user, setUser } = useAuthStore()
   const qc = useQueryClient()
+  const location = useLocation()
+
+  // Close mobile sidebar on navigation
+  useEffect(() => {
+    if (isMobile && onClose) onClose()
+  }, [location.pathname])
 
   const handleLogout = async () => {
     await logout()
@@ -22,14 +34,27 @@ export function Sidebar() {
     window.location.href = '/'
   }
 
+  const handleNavClick = () => {
+    if (isMobile && onClose) onClose()
+  }
+
   return (
     <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col h-full">
       {/* Logo */}
-      <div className="p-4 border-b border-gray-800">
+      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Github className="w-7 h-7 text-sky-400" />
           <span className="font-bold text-white text-lg">Maintain</span>
         </div>
+        {isMobile && (
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white p-1 transition-colors"
+            aria-label="Close navigation"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -38,6 +63,7 @@ export function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            onClick={handleNavClick}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive

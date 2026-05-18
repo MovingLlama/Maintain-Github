@@ -4,21 +4,21 @@ import { Button } from '../components/common/Button'
 export function LoginPage() {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm space-y-8">
+      <div className="w-full max-w-sm space-y-6 md:space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center">
-              <Github className="w-9 h-9 text-sky-400" />
+            <div className="w-14 h-14 md:w-16 md:h-16 bg-gray-800 rounded-2xl flex items-center justify-center">
+              <Github className="w-8 h-8 md:w-9 md:h-9 text-sky-400" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-white">Maintain@Github</h1>
-          <p className="mt-3 text-gray-400 text-sm">
+          <h1 className="text-2xl md:text-3xl font-bold text-white">Maintain@Github</h1>
+          <p className="mt-2 md:mt-3 text-gray-400 text-xs md:text-sm">
             AI-powered GitHub repository management.<br />
             Edit, improve, and push with the power of AI agents.
           </p>
         </div>
 
-        <div className="bg-gray-900 rounded-2xl p-6 space-y-4 border border-gray-800">
+        <div className="bg-gray-900 rounded-2xl p-5 md:p-6 space-y-4 border border-gray-800">
           <a href="/auth/github/login" className="block">
             <Button className="w-full gap-3" size="lg">
               <Github className="w-5 h-5" />
