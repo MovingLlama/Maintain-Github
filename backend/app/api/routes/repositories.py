@@ -1,5 +1,6 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
+import asyncio
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
@@ -54,7 +55,6 @@ async def list_local_repos(
 @router.post("/clone", response_model=RepositoryResponse, status_code=status.HTTP_201_CREATED)
 async def clone_repository(
     payload: RepositoryCreate,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -83,17 +83,18 @@ async def clone_repository(
         github_metadata=payload.github_metadata,
     )
     db.add(repo)
-    await db.flush()
+    await db.commit()
     
-    # Clone in background
+    # Clone in background using asyncio (more reliable than BackgroundTasks for async)
     token = _get_github_token(current_user)
-    background_tasks.add_task(
-        _clone_repo_background,
-        str(repo.id),
-        token,
-        payload.full_name,
-        str(current_user.id),
-        payload.default_branch,
+    asyncio.create_task(
+        _clone_repo_background(
+            str(repo.id),
+            token,
+            payload.full_name,
+            str(current_user.id),
+            payload.default_branch,
+        )
     )
     
     return repo
@@ -101,26 +102,51 @@ async def clone_repository(
 async def _clone_repo_background(
     repo_id: str, token: str, full_name: str, user_id: str, branch: str
 ):
+    """Background task: clone repo, update status, index for summary cache."""
     from app.db.base import AsyncSessionLocal
     from datetime import datetime, timezone
     from app.services.git.repo_indexer import index_repository
     from app.models.issue import RepoSummary
+
+    logger.info(f"Starting background clone: {full_name} (repo_id={repo_id})")
+
+    # Phase 1: Clone the repository
+    try:
+        path = await git_service.clone_repository(token, full_name, user_id, branch)
+        logger.info(f"Clone succeeded: {full_name} → {path}")
+    except Exception as e:
+        logger.error(f"Clone failed for {full_name}: {e}", exc_info=True)
+        # Set status to ERROR
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(Repository).where(Repository.id == repo_id))
+                repo = result.scalar_one_or_none()
+                if repo:
+                    repo.status = RepoStatus.ERROR
+                    await db.commit()
+        except Exception as db_err:
+            logger.error(f"Failed to update error status for {repo_id}: {db_err}")
+        return
+
+    # Phase 2: Update repo record + index
     try:
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Repository).where(Repository.id == repo_id))
             repo = result.scalar_one_or_none()
             if not repo:
+                logger.error(f"Repo {repo_id} not found after clone!")
                 return
-            
-            path = await git_service.clone_repository(token, full_name, user_id, branch)
+
             repo.local_path = str(path)
             repo.status = RepoStatus.READY
             repo.last_synced_at = datetime.now(timezone.utc)
             await db.flush()
 
-            # Index the repository for token-efficient context
+            # Phase 3: Index for token-efficient context
             try:
-                index_data = index_repository(str(path))
+                index_data = await asyncio.get_running_loop().run_in_executor(
+                    None, index_repository, str(path)
+                )
                 existing_summary = await db.execute(
                     select(RepoSummary).where(RepoSummary.repository_id == repo.id)
                 )
@@ -135,7 +161,7 @@ async def _clone_repo_background(
                     summary.last_indexed_at = datetime.now(timezone.utc)
                     summary.content_hash = index_data["content_hash"]
                 else:
-                    summary = RepoSummary(
+                    db.add(RepoSummary(
                         repository_id=repo.id,
                         summary_text=index_data["summary_text"],
                         file_tree_json=index_data["file_tree_json"],
@@ -143,23 +169,26 @@ async def _clone_repo_background(
                         languages_json=index_data["languages_json"],
                         total_files=index_data["total_files"],
                         total_size=index_data["total_size"],
-                        last_indexed_at=datetime.now(timezone.utc),
                         content_hash=index_data["content_hash"],
-                    )
-                    db.add(summary)
+                    ))
                 logger.info(f"Indexed repository {full_name}: {index_data['total_files']} files")
             except Exception as idx_err:
                 logger.warning(f"Repo indexing failed for {full_name} (non-fatal): {idx_err}")
 
             await db.commit()
+            logger.info(f"Background clone complete for {full_name}: status=READY")
+
     except Exception as e:
-        logger.error(f"Clone failed for repo {repo_id}: {e}", exc_info=True)
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(Repository).where(Repository.id == repo_id))
-            repo = result.scalar_one_or_none()
-            if repo:
-                repo.status = RepoStatus.ERROR
-                await db.commit()
+        logger.error(f"Post-clone processing failed for {full_name}: {e}", exc_info=True)
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(Repository).where(Repository.id == repo_id))
+                repo = result.scalar_one_or_none()
+                if repo:
+                    repo.status = RepoStatus.ERROR
+                    await db.commit()
+        except Exception as db_err:
+            logger.error(f"Failed to update error status for {repo_id}: {db_err}")
 
 @router.get("/{repo_id}", response_model=RepositoryResponse)
 async def get_repository(
