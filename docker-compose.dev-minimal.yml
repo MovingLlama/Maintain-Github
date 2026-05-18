@@ -60,6 +60,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - maintain_net
     extra_hosts:
@@ -77,6 +83,7 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       REPOS_STORAGE_PATH: /app/repos
+      RUN_MIGRATIONS: "false"
       POSTGRES_HOST: ${POSTGRES_HOST:-host.docker.internal}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     volumes:
@@ -98,7 +105,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - maintain_net
 

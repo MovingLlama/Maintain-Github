@@ -47,18 +47,10 @@ done
 echo "Fixing permissions for /app/repos..."
 chown -R appuser:appuser /app/repos 2>/dev/null || true
 
-# Use flock on a file in the shared /app/repos volume to ensure only one
-# container runs migrations at a time. Unlike pg_try_advisory_lock (which
-# is released when the checking connection closes), flock holds the lock
-# for the lifetime of the subshell — covering the entire migration run.
-LOCKFILE="/app/repos/.migration.lock"
-echo "Acquiring migration lock (flock $LOCKFILE)..."
-(
-    if ! flock -n 200; then
-        echo "Migration lock is held by another container — skipping migrations."
-        exit 0
-    fi
-
+# Only run migrations if RUN_MIGRATIONS is true (default).
+# Set RUN_MIGRATIONS=false on worker containers so only the backend
+# runs migrations — no race conditions, no locks needed.
+if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
     # Run Alembic migrations — but first check if this is a DB
     # that already has tables from the old create_all() path.
     echo "Checking database state..."
@@ -101,7 +93,9 @@ except Exception as e:
         echo "Running database migrations..."
         alembic upgrade head
     fi
-) 200>"$LOCKFILE"
+else
+    echo "RUN_MIGRATIONS=false — skipping migrations (worker mode)."
+fi
 
 echo "=== Starting application as appuser ==="
 # Ensure HOME points to appuser's actual home directory (not /root)

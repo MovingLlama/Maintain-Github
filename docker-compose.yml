@@ -97,6 +97,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - maintain_net
     labels:
@@ -121,6 +127,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       OLLAMA_BASE_URL: http://ollama:11434
       REPOS_STORAGE_PATH: /app/repos
+      RUN_MIGRATIONS: "false"
     logging:
       driver: "json-file"
       options:
@@ -148,7 +155,8 @@ services:
         max-file: "3"
         labels: "maintain.service=frontend"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - maintain_net
     labels:
