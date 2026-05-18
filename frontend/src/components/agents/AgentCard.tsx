@@ -16,6 +16,7 @@ export function AgentCard({ agent, isSystem, onEdit, onDelete }: AgentCardProps)
     get_git_diff: 'Diff',
     get_git_log: 'Log',
     search_in_files: 'Search',
+    delegate_to_agent: 'Delegate',
   }
 
   return (
@@ -31,28 +32,26 @@ export function AgentCard({ agent, isSystem, onEdit, onDelete }: AgentCardProps)
             </span>
           )}
         </div>
-        {!isSystem && (
-          <div className="flex items-center gap-1 shrink-0">
-            {onEdit && (
-              <button
-                onClick={onEdit}
-                className="text-gray-500 hover:text-sky-400 p-1 transition-colors"
-                title="Edit agent"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {onDelete && (
-              <button
-                onClick={onDelete}
-                className="text-gray-500 hover:text-red-400 p-1 transition-colors"
-                title="Delete agent"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="text-gray-500 hover:text-sky-400 p-1 transition-colors"
+              title={isSystem ? 'Edit agent details (name is protected)' : 'Edit agent'}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {!isSystem && onDelete && (
+            <button
+              onClick={onDelete}
+              className="text-gray-500 hover:text-red-400 p-1 transition-colors"
+              title="Delete agent"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {agent.description && (

@@ -13,7 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 async def _seed_agents() -> None:
-    """Seed default system agents if they don't exist."""
+    """Seed and refresh default system agents.
+
+    Creates missing agents and updates existing ones with the latest definitions.
+    Agent names are ALWAYS restored to their defaults to maintain the delegation
+    system integrity (agents reference each other by name).
+    """
     async with AsyncSessionLocal() as session:
         try:
             # Check if agents table exists
@@ -29,32 +34,48 @@ async def _seed_agents() -> None:
             except Exception:
                 return
 
-            # Check if any system agents exist
-            result = await session.execute(
-                select(Agent).where(Agent.is_default == True).limit(1)
-            )
-            if result.scalar_one_or_none():
-                logger.info("System agents already seeded, skipping.")
-                return
+            logger.info("Syncing default system agents...")
+            created = 0
+            updated = 0
 
-            logger.info("Seeding default system agents...")
             for agent_data in DEFAULT_AGENTS:
-                agent = Agent(
-                    id=agent_data["id"],
-                    user_id=None,  # system default
-                    name=agent_data["name"],
-                    description=agent_data["description"],
-                    system_prompt=agent_data["system_prompt"],
-                    model_provider=agent_data["model_provider"],
-                    model_name=agent_data["model_name"],
-                    tools_config=agent_data["tools_config"],
-                    is_default=agent_data["is_default"],
-                    is_active=agent_data["is_active"],
+                result = await session.execute(
+                    select(Agent).where(Agent.id == agent_data["id"])
                 )
-                session.add(agent)
+                existing = result.scalar_one_or_none()
+
+                if existing:
+                    # Update existing agent — always restore name to default
+                    existing.name = agent_data["name"]
+                    existing.description = agent_data["description"]
+                    existing.system_prompt = agent_data["system_prompt"]
+                    existing.tools_config = agent_data["tools_config"]
+                    existing.is_default = True
+                    # Preserve is_active state (user may have disabled it)
+                    # Preserve model_provider/model_name (user may have customized)
+                    updated += 1
+                else:
+                    # Create new agent
+                    agent = Agent(
+                        id=agent_data["id"],
+                        user_id=None,  # system default
+                        name=agent_data["name"],
+                        description=agent_data["description"],
+                        system_prompt=agent_data["system_prompt"],
+                        model_provider=agent_data["model_provider"],
+                        model_name=agent_data["model_name"],
+                        tools_config=agent_data["tools_config"],
+                        is_default=True,
+                        is_active=agent_data["is_active"],
+                    )
+                    session.add(agent)
+                    created += 1
 
             await session.commit()
-            logger.info(f"Seeded {len(DEFAULT_AGENTS)} default system agents.")
+            logger.info(
+                "Agent sync complete: %d created, %d updated.",
+                created, updated,
+            )
 
         except Exception as e:
             await session.rollback()

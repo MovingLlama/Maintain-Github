@@ -18,15 +18,17 @@ const AVAILABLE_TOOLS = [
   { value: 'get_git_diff', label: 'Git Diff', description: 'View uncommitted changes' },
   { value: 'get_git_log', label: 'Git Log', description: 'View commit history' },
   { value: 'search_in_files', label: 'Search', description: 'Search for patterns in files' },
+  { value: 'delegate_to_agent', label: 'Delegate to Agent', description: 'Delegate sub-tasks to other specialized agents' },
 ]
 
 interface AgentFormProps {
   onSubmit: (data: AgentFormData) => Promise<void>
   models: AIModel[]
   initialData?: Partial<AgentFormData>
+  isSystem?: boolean
 }
 
-export function AgentForm({ onSubmit, models, initialData }: AgentFormProps) {
+export function AgentForm({ onSubmit, models, initialData, isSystem }: AgentFormProps) {
   const [name, setName] = useState(initialData?.name || '')
   const [description, setDescription] = useState(initialData?.description || '')
   const [systemPrompt, setSystemPrompt] = useState(initialData?.system_prompt || '')
@@ -79,15 +81,28 @@ export function AgentForm({ onSubmit, models, initialData }: AgentFormProps) {
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Name */}
       <div>
-        <label className="block text-xs font-medium text-gray-400 mb-1">Name *</label>
+        <label className="block text-xs font-medium text-gray-400 mb-1">
+          Name *
+          {isSystem && (
+            <span className="text-amber-400 ml-2">(protected — cannot be changed)</span>
+          )}
+        </label>
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
+          disabled={isSystem}
           placeholder="e.g. My Code Reviewer"
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-sky-500 focus:outline-none"
-          required
+          className={`w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm placeholder-gray-500 focus:border-sky-500 focus:outline-none ${
+            isSystem ? 'text-gray-500 cursor-not-allowed opacity-60' : 'text-white'
+          }`}
+          required={!isSystem}
         />
+        {isSystem && (
+          <p className="text-xs text-amber-400/80 mt-1">
+            System agent names are fixed to maintain the delegation chain. You can customize all other settings below.
+          </p>
+        )}
       </div>
 
       {/* Description */}

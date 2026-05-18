@@ -119,15 +119,29 @@ async def update_agent(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update an agent. Only user-owned agents can be updated (not system defaults)."""
+    """Update an agent. System agents (is_default=True) can be edited EXCEPT their name."""
     result = await db.execute(
-        select(Agent).where(Agent.id == agent_id, Agent.user_id == current_user.id)
+        select(Agent).where(
+            Agent.id == agent_id,
+            (Agent.user_id == None) | (Agent.user_id == current_user.id),
+        )
     )
     agent = result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found or not owned by you")
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Check ownership: only user-owned agents or system agents
+    if agent.user_id is not None and str(agent.user_id) != str(current_user.id):
+        raise HTTPException(status_code=403, detail="Not your agent")
+
+    is_system = agent.is_default and agent.user_id is None
 
     if payload.name is not None:
+        if is_system:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot rename system agents. Their names are fixed to ensure the delegation system works correctly.",
+            )
         agent.name = payload.name
     if payload.description is not None:
         agent.description = payload.description

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { listAgents, createAgent, deleteAgent } from '../api/agents'
+import { listAgents, createAgent, updateAgent, deleteAgent } from '../api/agents'
 import { listModels } from '../api/ai'
 import { AgentCard } from '../components/agents/AgentCard'
 import { AgentForm, AgentFormData } from '../components/agents/AgentForm'
@@ -60,6 +60,23 @@ export function AgentPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['agents'] })
       setShowForm(false)
+      setEditingAgent(null)
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: AgentFormData }) => updateAgent(id, {
+      name: editingAgent?.is_default ? undefined : data.name, // never send name for system agents
+      description: data.description || undefined,
+      system_prompt: data.system_prompt || undefined,
+      model_provider: data.model_provider || undefined,
+      model_name: data.model_name || undefined,
+      tools_config: data.tools_config || undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agents'] })
+      setShowForm(false)
+      setEditingAgent(null)
     },
   })
 
@@ -100,7 +117,9 @@ export function AgentPage() {
             >
               <div className="flex items-center justify-between mb-4 shrink-0">
                 <h2 className="text-lg font-semibold text-white">
-                  {editingAgent ? 'Edit Agent' : 'Create Agent'}
+                  {editingAgent
+                    ? editingAgent.is_default ? 'Edit System Agent' : 'Edit Agent'
+                    : 'Create Agent'}
                 </h2>
                 <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white">
                   <X className="w-5 h-5" />
@@ -108,8 +127,15 @@ export function AgentPage() {
               </div>
               <div className="flex-1 overflow-y-auto">
                 <AgentForm
-                  onSubmit={async (data) => { await createMutation.mutateAsync(data) }}
+                  onSubmit={async (data) => {
+                    if (editingAgent) {
+                      await updateMutation.mutateAsync({ id: editingAgent.id, data })
+                    } else {
+                      await createMutation.mutateAsync(data)
+                    }
+                  }}
                   models={allModels}
+                  isSystem={editingAgent?.is_default ?? false}
                   initialData={editingAgent ? {
                     name: editingAgent.name,
                     description: editingAgent.description || '',
@@ -143,6 +169,7 @@ export function AgentPage() {
                   key={agent.id}
                   agent={agent}
                   isSystem={true}
+                  onEdit={() => { setEditingAgent(agent); setShowForm(true) }}
                   onDelete={() => deleteMutation.mutate(agent.id)}
                 />
               ))}
