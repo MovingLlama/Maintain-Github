@@ -34,6 +34,19 @@ def _table_exists(table_name: str) -> bool:
     return result.scalar()
 
 
+def _index_exists(index_name: str) -> bool:
+    """Check if an index exists."""
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT EXISTS (SELECT FROM pg_indexes "
+            "WHERE schemaname = 'public' AND indexname = :name)"
+        ),
+        {"name": index_name},
+    )
+    return result.scalar()
+
+
 def upgrade() -> None:
     # ─── users ───────────────────────────────────────────────
     if not _table_exists("users"):
@@ -122,20 +135,23 @@ def upgrade() -> None:
         EXCEPTION WHEN duplicate_object THEN NULL;
         END $$;
     """)
-    if not _table_exists("messages"):
-        op.create_table(
-            "messages",
-            sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-            sa.Column("chat_id", postgresql.UUID(as_uuid=True),
-                      sa.ForeignKey("chats.id", ondelete="CASCADE"), nullable=False),
-            sa.Column("role", sa.Enum("user", "assistant", "system", "tool", name="messagerole", create_type=False), nullable=False),
-            sa.Column("content", sa.Text(), nullable=False),
-            sa.Column("tool_calls", postgresql.JSONB(), nullable=True),
-            sa.Column("tool_result", postgresql.JSONB(), nullable=True),
-            sa.Column("model_used", sa.String(255), nullable=True),
-            sa.Column("token_count", sa.Integer(), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+    # Use raw SQL CREATE TABLE IF NOT EXISTS to avoid SQLAlchemy's
+    # Enum before_create event handler which would try to recreate
+    # the messagerole type even when create_type=False is set.
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id UUID PRIMARY KEY,
+            chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+            role messagerole NOT NULL,
+            content TEXT NOT NULL,
+            tool_calls JSONB,
+            tool_result JSONB,
+            model_used VARCHAR(255),
+            token_count INTEGER,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
+    """)
+    if not _index_exists("ix_messages_chat_id"):
         op.create_index("ix_messages_chat_id", "messages", ["chat_id"])
 
     # ─── sessions ────────────────────────────────────────────
