@@ -112,6 +112,14 @@ export function ChatPage() {
     },
   })
 
+  const renameMutation = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) => updateChatTitle(id, title),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['chats'] })
+      setEditingChatId(null)
+    },
+  })
+
   const handleSend = async (content: string) => {
     let chatId = activeChatId
     if (!chatId) {
@@ -203,14 +211,20 @@ export function ChatPage() {
               <input
                 value={editTitle}
                 onChange={e => setEditTitle(e.target.value)}
-                onBlur={() => { updateChatTitle(chat.id, editTitle); setEditingChatId(null) }}
-                onKeyDown={e => { if (e.key === 'Enter') { updateChatTitle(chat.id, editTitle); setEditingChatId(null) } }}
+                onBlur={() => { if (editTitle.trim() && editTitle !== chat.title) renameMutation.mutate({ id: chat.id, title: editTitle.trim() }); else setEditingChatId(null) }}
+                onKeyDown={e => { if (e.key === 'Enter') { if (editTitle.trim() && editTitle !== chat.title) renameMutation.mutate({ id: chat.id, title: editTitle.trim() }); else setEditingChatId(null) } }}
                 className="flex-1 bg-gray-800 text-sm text-white px-1 rounded outline-none"
                 autoFocus
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <span className="flex-1 text-sm truncate">{chat.title}</span>
+              <span
+                className="flex-1 text-sm truncate cursor-pointer hover:text-white"
+                onDoubleClick={(e) => { e.stopPropagation(); setEditingChatId(chat.id); setEditTitle(chat.title) }}
+                title="Double-click to rename"
+              >
+                {chat.title}
+              </span>
             )}
             <button
               className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400"

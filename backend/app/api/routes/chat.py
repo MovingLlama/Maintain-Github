@@ -348,6 +348,7 @@ async def update_chat_title(
         chat.title = payload.title
     if payload.system_prompt is not None:
         chat.system_prompt = payload.system_prompt
+    await db.commit()
     return {"id": str(chat.id), "title": chat.title, "system_prompt": chat.system_prompt}
 
 
