@@ -136,24 +136,26 @@ async def update_agent(
 
     is_system = agent.is_default and agent.user_id is None
 
-    if payload.name is not None:
+    # Use model_fields_set to distinguish "omitted" from "explicitly null"
+    # Fields in model_fields_set were present in the request body (even if null)
+    if 'name' in payload.model_fields_set:
         if is_system:
             raise HTTPException(
                 status_code=422,
                 detail="Cannot rename system agents. Their names are fixed to ensure the delegation system works correctly.",
             )
         agent.name = payload.name
-    if payload.description is not None:
+    if 'description' in payload.model_fields_set:
         agent.description = payload.description
-    if payload.system_prompt is not None:
+    if 'system_prompt' in payload.model_fields_set:
         agent.system_prompt = payload.system_prompt
-    if payload.model_provider is not None:
+    if 'model_provider' in payload.model_fields_set:
         agent.model_provider = payload.model_provider
-    if payload.model_name is not None:
+    if 'model_name' in payload.model_fields_set:
         agent.model_name = payload.model_name
-    if payload.tools_config is not None:
+    if 'tools_config' in payload.model_fields_set:
         agent.tools_config = payload.tools_config
-    if payload.is_active is not None:
+    if 'is_active' in payload.model_fields_set:
         agent.is_active = payload.is_active
 
     await db.flush()

@@ -53,14 +53,18 @@ export function AgentPage() {
       name: data.name,
       description: data.description || undefined,
       system_prompt: data.system_prompt || undefined,
-      model_provider: data.model_provider || undefined,
-      model_name: data.model_name || undefined,
+      model_provider: data.model_provider || null,
+      model_name: data.model_name || null,
       tools_config: data.tools_config || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['agents'] })
       setShowForm(false)
       setEditingAgent(null)
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail || err?.message || 'Unknown error'
+      alert(`Failed to create agent: ${detail}`)
     },
   })
 
@@ -69,14 +73,18 @@ export function AgentPage() {
       name: editingAgent?.is_default ? undefined : data.name, // never send name for system agents
       description: data.description || undefined,
       system_prompt: data.system_prompt || undefined,
-      model_provider: data.model_provider || undefined,
-      model_name: data.model_name || undefined,
+      model_provider: data.model_provider || null,
+      model_name: data.model_name || null,
       tools_config: data.tools_config || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['agents'] })
       setShowForm(false)
       setEditingAgent(null)
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail || err?.message || 'Unknown error'
+      alert(`Failed to update agent: ${detail}`)
     },
   })
 

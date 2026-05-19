@@ -25,8 +25,8 @@ export async function createAgent(payload: {
   name: string
   description?: string
   system_prompt?: string
-  model_provider?: string
-  model_name?: string
+  model_provider?: string | null
+  model_name?: string | null
   tools_config?: string[]
 }): Promise<Agent> {
   const { data } = await api.post('/agents/', payload)
@@ -37,8 +37,8 @@ export async function updateAgent(id: string, payload: {
   name?: string
   description?: string
   system_prompt?: string
-  model_provider?: string
-  model_name?: string
+  model_provider?: string | null
+  model_name?: string | null
   tools_config?: string[]
   is_active?: boolean
 }): Promise<Agent> {

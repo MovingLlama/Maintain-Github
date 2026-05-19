@@ -72,6 +72,9 @@ export function AgentForm({ onSubmit, models, initialData, isSystem }: AgentForm
         model_name: modelName || '',
         tools_config: toolsConfig,
       })
+    } catch (error) {
+      console.error('Agent form submission failed:', error)
+      throw error // Re-throw so mutation's onError can handle it
     } finally {
       setSubmitting(false)
     }
