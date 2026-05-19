@@ -4,7 +4,6 @@ Database initialization: runs on EVERY startup.
 - Syncs default system agents on EVERY startup (names restored, details refreshed).
 """
 import logging
-from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy import text, select
 from app.db.base import engine, Base, AsyncSessionLocal
 from app.models.agent import Agent
@@ -85,26 +84,19 @@ async def _seed_agents() -> None:
 
 async def init_db() -> None:
     """
-    Check if tables exist; if not, create them.
-    In production, Alembic handles migrations.
-    This is a fallback for first-run setup.
+    Initialize database schema by creating any missing tables.
+
+    Uses SQLAlchemy's create_all which generates CREATE TABLE IF NOT EXISTS,
+    so it's safe to run on any database state — fully initialized, completely
+    empty, or "half" installed (some tables missing after a failed setup).
+
+    In production, Alembic handles migrations; this is a fallback that also
+    repairs broken states by filling in any missing tables.
     """
     async with engine.begin() as conn:
-        # Check if the users table exists (as a proxy for DB being initialized)
-        result = await conn.execute(
-            text(
-                "SELECT EXISTS (SELECT FROM information_schema.tables "
-                "WHERE table_schema = 'public' AND table_name = 'users')"
-            )
-        )
-        exists = result.scalar()
-
-        if not exists:
-            logger.info("Database schema not found. Creating tables...")
-            await conn.run_sync(Base.metadata.create_all)
-            logger.info("Database schema created successfully.")
-        else:
-            logger.info("Database schema already exists. Skipping creation.")
+        logger.info("Checking database schema and creating any missing tables...")
+        await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database schema check complete (all tables present).")
 
     # Seed agents after schema is confirmed
     await _seed_agents()

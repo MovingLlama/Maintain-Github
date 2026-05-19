@@ -86,7 +86,19 @@ except Exception as e:
 
     if [ "$MIGRATION_MODE" = "STAMP" ]; then
         echo "Existing database detected without Alembic version table."
-        echo "Stamping current head revision (tables already exist from create_all)..."
+        echo "Ensuring all base tables exist (repairing partial installations)..."
+        python -c "
+import asyncio, sys
+sys.path.insert(0, '.')
+from app.db.base import Base, engine
+async def _ensure():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    await engine.dispose()
+asyncio.run(_ensure())
+print('Base tables check complete.')
+"
+        echo "Stamping current head revision..."
         alembic stamp head
         echo "Stamp complete."
     else
