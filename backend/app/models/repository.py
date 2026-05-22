@@ -41,3 +41,4 @@ class Repository(Base):
     chats = relationship("ChatRepository", back_populates="repository", cascade="all, delete-orphan")
     issues = relationship("RepoIssue", back_populates="repository", cascade="all, delete-orphan")
     summary = relationship("RepoSummary", back_populates="repository", uselist=False, cascade="all, delete-orphan")
+    interview_questions = relationship("InterviewPrepQuestion", back_populates="repository", cascade="all, delete-orphan")

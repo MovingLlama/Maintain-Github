@@ -5,10 +5,11 @@ from app.models.chat import Chat, Message, MessageRole, ChatRepository
 from app.models.agent import Agent
 from app.models.issue import RepoSummary, RepoIssue
 from app.models.settings import AppSetting
+from app.models.interview import InterviewPrepQuestion
 
 __all__ = [
     "User", "Session", "Repository", "RepoStatus",
     "Chat", "Message", "MessageRole", "ChatRepository",
     "Agent", "RepoSummary", "RepoIssue",
-    "AppSetting",
+    "AppSetting", "InterviewPrepQuestion",
 ]

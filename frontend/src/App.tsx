@@ -7,6 +7,7 @@ import { RepositoriesPage } from './pages/RepositoriesPage'
 import { ChatPage } from './pages/ChatPage'
 import { AgentPage } from './pages/AgentPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { InterviewPage } from './pages/InterviewPage'
 import { useAuth } from './hooks/useAuth'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { DebugProvider } from './components/common/DebugProvider'
@@ -41,6 +42,7 @@ function AppRoutes() {
         <Route path="/repos" element={<RepositoriesPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/agent" element={<AgentPage />} />
+        <Route path="/interview" element={<InterviewPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/" element={<Navigate to="/repos" replace />} />
       </Route>

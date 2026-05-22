@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { GitBranch, MessageSquare, Settings, LogOut, Github, Bot, X } from 'lucide-react'
+import { GitBranch, MessageSquare, Settings, LogOut, Github, Bot, X, BookOpen } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { logout } from '../../api/auth'
 import { useQueryClient } from '@tanstack/react-query'
@@ -9,6 +9,7 @@ const navItems = [
   { to: '/repos', icon: GitBranch, label: 'Repositories' },
   { to: '/chat', icon: MessageSquare, label: 'Chat' },
   { to: '/agent', icon: Bot, label: 'Agent' },
+  { to: '/interview', icon: BookOpen, label: 'Interview Prep' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 

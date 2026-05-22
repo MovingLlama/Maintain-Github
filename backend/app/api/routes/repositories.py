@@ -178,6 +178,21 @@ async def _clone_repo_background(
             await db.commit()
             logger.info(f"Background clone complete for {full_name}: status=READY")
 
+            # Phase 4: Auto-generate 5 Baseline Interview Prep Questions (Mixed, Medium)
+            try:
+                from app.services.ai.interview_service import InterviewService
+                interview_service = InterviewService(db)
+                await interview_service.generate_questions(
+                    repo_id=str(repo.id),
+                    user_id=user_id,
+                    count=5,
+                    category=None,
+                    difficulty="Medium",
+                )
+                logger.info(f"Auto-generated 5 baseline interview questions for {full_name}")
+            except Exception as iv_err:
+                logger.warning(f"Baseline interview questions generation failed for {full_name} (non-fatal): {iv_err}")
+
     except Exception as e:
         logger.error(f"Post-clone processing failed for {full_name}: {e}", exc_info=True)
         try:

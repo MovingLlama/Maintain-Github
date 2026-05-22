@@ -94,6 +94,7 @@ export interface UserSettings {
   enabled_models: string[]
   default_chat_model: string | null
   title_generation_model: string | null
+  interview_model: string | null
 }
 
 export interface FileTreeItem {
@@ -134,4 +135,18 @@ export interface RepoIssue {
   fix_branch: string | null
   fix_model_used: string | null
   analyzed_at: string | null
+}
+
+export interface InterviewPrepQuestion {
+  id: string
+  repository_id: string
+  user_id: string
+  question: string
+  answer: string
+  category: string
+  difficulty: string
+  user_answer: string | null
+  feedback: string | null
+  is_completed: boolean
+  created_at: string
 }

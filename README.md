@@ -9,6 +9,7 @@ An AI-powered GitHub repository management platform. Select your GitHub reposito
 - **File Viewer** — View files in your cloned repositories with syntax highlighting
 - **AI Chat** — Chat with AI models about your code
 - **Agent Mode** — Let AI agents autonomously read, edit, and improve your codebase
+- **Technical Interview Prep** — Automatically generate code-grounded software engineering mock interview questions based on your specific repositories, complete with interactive Q&A practicing and qualitative AI principal engineer review rubrics
 - **Multi-Model Support** — Local Ollama models AND OpenRouter (200+ cloud models)
 - **Git Operations** — Commit and push changes directly to GitHub
 - **HTTPS** — Automatic TLS via Traefik + Let's Encrypt

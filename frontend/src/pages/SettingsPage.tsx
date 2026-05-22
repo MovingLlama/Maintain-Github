@@ -102,6 +102,12 @@ export function SettingsPage() {
     saveMutation.mutate({ title_generation_model: key })
   }
 
+  const interviewModel = settings?.interview_model ?? null
+
+  const setInterviewModel = (key: string | null) => {
+    saveMutation.mutate({ interview_model: key })
+  }
+
   const flatEnabledModels = (models?.ollama ?? [])
     .concat(models?.openrouter ?? [])
     .filter(m => enabledModels.includes(modelKey(m.provider, m.id)))
@@ -412,6 +418,35 @@ export function SettingsPage() {
             className="w-full px-2.5 py-1.5 text-xs bg-gray-800 border border-gray-700 rounded-md text-gray-200 focus:outline-none focus:border-sky-500 disabled:opacity-50"
           >
             <option value="">Auto (default chat model)</option>
+            {flatEnabledModels.map(m => {
+              const key = modelKey(m.provider, m.id)
+              return (
+                <option key={key} value={key}>
+                  [{m.provider}] {m.name}
+                </option>
+              )
+            })}
+            {flatEnabledModels.length === 0 && (
+              <option value="" disabled>No models enabled – enable models above first</option>
+            )}
+          </select>
+        </div>
+
+        {/* Interview Prep Override Model selector */}
+        <div className="pt-4 border-t border-gray-700">
+          <label className="text-xs text-gray-400 block mb-1.5">
+            Interview Prep Model Override
+          </label>
+          <p className="text-[10px] text-gray-500 mb-2">
+            Override the model used specifically for generating and evaluating your interview questions.
+          </p>
+          <select
+            value={interviewModel ?? ''}
+            onChange={e => setInterviewModel(e.target.value || null)}
+            disabled={settingsLoading || saveMutation.isPending}
+            className="w-full px-2.5 py-1.5 text-xs bg-gray-800 border border-gray-700 rounded-md text-gray-200 focus:outline-none focus:border-sky-500 disabled:opacity-50"
+          >
+            <option value="">Inherit (default chat model)</option>
             {flatEnabledModels.map(m => {
               const key = modelKey(m.provider, m.id)
               return (
